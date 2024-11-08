@@ -1,0 +1,15 @@
+HELP.md
+
+### VS Code ###
+.vscode/
+
+### IntelliJ IDEA ###
+.idea
+*.log
+*.tmp
+*.iws
+*.iml
+*.ipr
+
+### Mac OS ###
+.DS_Store
