@@ -177,7 +177,7 @@ with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.5, min_tra
 
             # Show 3D coordinates as overlay
             for i, (x, y, depth) in enumerate(previous_positions[-3:]):
-                cv2.putText(color_image, f"Point {landmarks_collection[key_landmarks[i]]}: Depth={depth:.2f}m", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+                cv2.putText(color_image, f"Point {i}: Depth={depth:.2f}m", (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
 
         # Display the image
         cv2.imshow('Fall Detection', color_image)
