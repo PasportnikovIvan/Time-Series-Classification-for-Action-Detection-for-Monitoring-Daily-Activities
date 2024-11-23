@@ -92,6 +92,53 @@ def convert_to_head_relative_coordinates(landmarks, head_landmark):
     
     return head_relative_landmarks
 
+def detect_aruco_markers(image):
+    """
+    Detect ArUco markers and return their coords and orientation. 
+
+    Args:
+        image (np.ndarray): imput img
+
+    Returns:
+        tuple: Tuple of rotations (rvec), positions (tvec) and id of detected markers.
+    """
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    corners, ids, _ = cv2.aruco.detectMarkers(gray_image, aruco_dict, parameters=aruco_params)
+
+    if ids is not None:
+        for i, corner in enumerate(corners):
+            rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corner, marker_size, camera_matrix, dist_coeffs)
+            cv2.aruco.drawDetectedMarkers(image, corners, ids)
+            cv2.drawFrameAxes(image, camera_matrix, dist_coeffs, rvec, tvec, 0.1)
+            print(f"ArUco ID={ids[i][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
+        return rvec, tvec, ids
+    return None, None, None
+
+def convert_landmarks_to_global(landmarks, rvec, tvec):
+    """
+    Convert local pose landmarks to global using ArUco marker.
+
+    Args:
+        landmarks (list): List of landmarks with x, y, z coordinates
+        rvec (np.ndarray): ArUco marker rotation
+        tvec (np.ndarray): ArUco marker position
+
+    Returns:
+        list: Global landmarks
+    """
+    if rvec is None or tvec is None:
+        return landmarks
+
+    rotation_matrix, _ = cv2.Rodrigues(rvec[0])
+    translation_vector = tvec[0].flatten()
+
+    global_landmarks = []
+    for landmark in landmarks:
+        local_point = np.array([[landmark[0]], [landmark[1]], [landmark[2]]])
+        global_point = rotation_matrix @ local_point + translation_vector.reshape(-1, 1)
+        global_landmarks.append(global_point.flatten().tolist())
+    return global_landmarks
+
 def detectFall(landmarks, previous_avg_shoulder_height):
     """
     The logic of fall detection. !TODO better!
@@ -144,6 +191,24 @@ IMAGE_HEIGHT = 480
 # Get depth sensor's depth scale (conversion factor)
 depth_sensor = profile.get_device().first_depth_sensor()
 depth_scale = depth_sensor.get_depth_scale()
+
+# ArUco markers
+aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+aruco_params = cv2.aruco.DetectorParameters()
+marker_size = 0.038  # Marker size in METERS
+# 1280x720
+camera_matrix = np.array([
+    [642.33569336, 0.0,          641.48535156], 
+    [0.0,          641.68328857, 370.55108643], 
+    [0.0,          0.0,          1.0]
+])
+# # 640x480
+# camera_matrix = np.array([
+#     [385.40142822, 0.0,          320.89123535], 
+#     [0.0,          385.00997925, 246.3306427], 
+#     [0.0,          0.0,          1.0]
+# ])
+dist_coeffs = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222161])
     
 # Fall detection variables
 previous_avg_shoulder_height = 0
@@ -166,6 +231,9 @@ with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.7, min_tra
         # Convert images to OpenCV format
         color_image = np.asanyarray(color_frame.get_data())
         depth_image = np.asanyarray(depth_frame.get_data())
+        
+        # ArUco markers detection
+        rvec, tvec, ids = detect_aruco_markers(color_image)
 
         # Convert the color image to RGB for MediaPipe processing
         rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
@@ -193,19 +261,27 @@ with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.7, min_tra
                     median_depth = calculate_median_depth(depth_image, x, y)  # Use the depth data
                     depth = median_depth * depth_scale # Convert depth to meters
                     landmarks.append((x, y, depth)) 
-
+                    
                     print(f"Landmark {idx}: x={x}, y={y}, depth={depth:.2f}m, name={landmarks_collection[idx]}")
                 else:
                     print(f"Landmark {idx}: out of bounds")
+                    
+            # Преобразуем координаты в глобальные
+            print("================  Global Coordinates:  =================")
+            global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
+
+            for idx, landmark in enumerate(global_landmarks):
+                print(f"Landmark {idx}: {landmark}, {landmarks_collection[idx]}")
+            print("====================  END Global  ======================")
 
             # Convert to head-relative coordinates
+            print("=============  Head-relative coordinates:  =============")
             head_landmark = landmarks[0]  # Nose
             head_relative_landmarks = convert_to_head_relative_coordinates(landmarks, head_landmark)
-            
-            print("=============  Head-relative coordinates:  =============")
+                       
             for idx, landmark in enumerate(head_relative_landmarks):
                 print(f"Landmark {idx}: {landmark}, {landmarks_collection[idx]}")
-            print("=======================  END  ==========================")
+            print("================  END Head-relative  ===================")
 
             current_time = time()
             # Fall detection and data saving each 2 seconds
@@ -246,7 +322,7 @@ pipeline.stop()
 cv2.destroyAllWindows()
 
 # Save collected data to file
-output_file = "falling_ivan_01.json"
+output_file = "falling_ivan_02.json"
 with open(output_file, "w") as f:
     json.dump(data_to_save, f, indent=4)
 print(f"Data saved to {output_file}")
