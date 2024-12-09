@@ -1,13 +1,38 @@
 import cv2
-import mediapipe as mp
-from mediapipe.tasks import python
-from mediapipe.tasks.python import vision
-import pyrealsense2 as rs
+import cv2.aruco as aruco
 import numpy as np
+import mediapipe as mp
+import pyrealsense2 as rs
 import json
-import os
+from time import time
+from typing import List, Tuple, Dict
 
-landmarks_collection = {0: "nose",
+#======================== CONSTANTS ========================
+#------------------------ Window ------------------------
+IMAGE_WIDTH = 640
+IMAGE_HEIGHT = 480
+VISUAL_LANDMARKS = True
+
+#------------------------ Aruco ------------------------
+ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
+ARUCO_PARAMS = aruco.DetectorParameters()
+MARKER_SIZE = 0.0861  # Marker size in METERS
+# 1280x720
+CAMERA_MATRIX = np.array([
+    [642.33569336, 0.0,          641.48535156], 
+    [0.0,          641.68328857, 370.55108643], 
+    [0.0,          0.0,          1.0]
+])
+# # 640x480
+# CAMERA_MATRIX = np.array([
+#     [385.40142822, 0.0,          320.89123535], 
+#     [0.0,          385.00997925, 246.3306427], 
+#     [0.0,          0.0,          1.0]
+# ])
+DIST_COEFFS = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222161])
+    
+#------------------------ Landmarks ------------------------
+LANDMARKS_COLLECTION = {0: "nose",
                         1: "left eye (inner)",
                         2: "left eye",
                         3: "left eye (outer)",
@@ -42,21 +67,63 @@ landmarks_collection = {0: "nose",
                         32: "right foot index",
                         }
 
-mp_drawing = mp.solutions.drawing_utils
-mp_pose = mp.solutions.pose
+#=============== CAMERA SETUP AND MEDIAPIPE ===============
+def setup_camera_and_pose():
+    """
+    Setup for RealSense camera and MediaPipe.
+    """
+    # RealSense cam setup
+    pipeline = rs.pipeline()
+    config = rs.config()
+    config.enable_stream(rs.stream.color, IMAGE_WIDTH, IMAGE_HEIGHT, rs.format.bgr8, 30)
+    config.enable_stream(rs.stream.depth, IMAGE_WIDTH, IMAGE_HEIGHT, rs.format.z16, 30)
+    profile = pipeline.start(config)
+    
+    # Get depth sensor's depth scale (conversion factor)
+    depth_sensor = profile.get_device().first_depth_sensor()
+    depth_scale = depth_sensor.get_depth_scale()
+    pose = mp.solutions.pose.Pose(
+        static_image_mode=False, 
+        min_detection_confidence=0.7, 
+        min_tracking_confidence=0.5, 
+        model_complexity=2
+    )
+    return pipeline, pose, depth_scale
 
-# RealSense cam setup
-pipeline = rs.pipeline()
-config = rs.config()
-config.enable_stream(rs.stream.color, 640, 480, rs.format.bgr8, 30)
-config.enable_stream(rs.stream.depth, 640, 480, rs.format.z16, 30)
-pipeline.start(config)
+#=============== ARUCO MARKER DETECTION ===============
+def detect_aruco_markers(image):
+    """
+    Detect ArUco markers and return their coords and orientation. 
 
-# img resolution
-IMAGE_WIDTH = 640
-IMAGE_HEIGHT = 480
+    Args:
+        image (np.ndarray): imput img
 
-def calculate_median_depth(depth_frame, x, y, radius=5):
+    Returns:
+        tuple: Tuple of rotations (rvec), positions (tvec) and id of detected markers.
+    """
+    gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    corners, ids, _ = cv2.aruco.detectMarkers(gray_image, ARUCO_DICT, parameters=ARUCO_PARAMS)
+
+    if ids is not None:
+        for i, corner in enumerate(corners):
+            marker_points = np.array(
+                [
+                    [-MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
+                    [MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
+                    [MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
+                    [-MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
+                ],
+                dtype=np.float32,
+            )
+            _, rvec, tvec = cv2.solvePnP(marker_points, corner, CAMERA_MATRIX, DIST_COEFFS)
+            cv2.aruco.drawDetectedMarkers(image, corners, ids)
+            cv2.drawFrameAxes(image, CAMERA_MATRIX, DIST_COEFFS, rvec, tvec, 0.1)
+            print(f"ArUco ID={ids[i][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
+        return rvec, tvec, ids
+    return None, None, None
+
+#=============== DEPTH CALCULATION ===============
+def calculate_median_depth(x, y, depth_frame, radius=5):
     """
     Calculate median depth for 25% of closest points around a given point.
     
@@ -70,108 +137,169 @@ def calculate_median_depth(depth_frame, x, y, radius=5):
     float: Median depth value
     """
     # Extract a window around the point
-    window = depth_frame[max(0, y-radius):min(y+radius+1, IMAGE_HEIGHT), max(0, x-radius):min(x+radius+1, IMAGE_WIDTH)]
+    window = depth_frame[max(0, y-radius):min(y+radius+1, IMAGE_HEIGHT),
+                         max(0, x-radius):min(x+radius+1, IMAGE_WIDTH)]
     
     # Flatten the window and remove zero values
     depths = window.flatten()[window.flatten() != 0]
     
-    # Sort depths and select 25% closest points
-    sorted_depths = np.sort(depths)
-    num_points = len(sorted_depths)
-    quarter_index = int(num_points * 0.25)
-    closest_points = sorted_depths[:quarter_index+1]
-    
-    # Calculate median
-    return np.median(closest_points)
+    # Return the median of the closest points
+    if len(depths) > 0:
+        sorted_depths = np.sort(depths)
+        return np.median(sorted_depths[:len(sorted_depths) // 4])
+    return 0  # Return 0 if no valid depths are found
 
-def convert_to_head_relative_coordinates(landmarks, head_landmark):
+#=============== PIXELS -> CAMERA COORDS ===============
+def pixels_to_camera_coordinates(x, y, depth):
     """
-    Convert all landmarks to be relative to the head position.
+    Terning pixel coords into camera axes.
     
     Args:
-    landmarks (list): List of landmarks with x, y, z coordinates
-    head_landmark (list): Head landmark with x, y, z coordinates
+    x (int): X-coord in pixels.
+    y (int): Y-coord in pixels.
+    depth (float): depth in meters.
     
     Returns:
-    list: Landmarks with coordinates relative to the head
+    tuple: Cam coords (X, Y, Z).
     """
-    head_relative_landmarks = []
+    fx, fy = CAMERA_MATRIX[0, 0], CAMERA_MATRIX[1, 1]
+    cx, cy = CAMERA_MATRIX[0, 2], CAMERA_MATRIX[1, 2]
     
-    for landmark in landmarks:
-        relative_x = landmark[0] - head_landmark[0]
-        relative_y = landmark[1] - head_landmark[1]
-        relative_z = landmark[2] - head_landmark[2]
-        
-        head_relative_landmarks.append([relative_x, relative_y, relative_z])
+    # making meters
+    cam_x = (x - cx) * depth / fx
+    cam_y = (y - cy) * depth / fy
+    cam_z = depth  # Z-is the same
     
-    return head_relative_landmarks
+    return cam_x, cam_y, cam_z
 
-# getting pose with MediaPipe
-frame_count = 0
-data_to_save = []
-with mp_pose.Pose(min_detection_confidence=0.5, min_tracking_confidence=0.5) as pose:
-    while True:
-        frames = pipeline.wait_for_frames()
-        color_frame = frames.get_color_frame()
-        depth_frame = frames.get_depth_frame()
-        if not color_frame or not depth_frame:
-            continue
+#=============== CAMERA -> GLOBAL COORDS ===============
+def convert_landmarks_to_global(landmarks, rvec, tvec):
+    """
+    Convert local pose landmarks to global using ArUco marker.
 
-        color_image = np.asanyarray(color_frame.get_data())
-        image_rgb = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-        results = pose.process(image_rgb)
+    Args:
+        landmarks (list): List of landmarks with x, y, z coordinates
+        rvec (np.ndarray): ArUco marker rotation
+        tvec (np.ndarray): ArUco marker position
 
-        if results.pose_landmarks:
-            mp_drawing.draw_landmarks(color_image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+    Returns:
+        list: Global landmarks
+    """
+    if rvec is None or tvec is None:
+        return landmarks
+    
+    print(f"Shape of rvec before reshape: {rvec.shape}")
+    if rvec.shape not in [(3, 1), (1, 3)]:
+        rvec = rvec.reshape(3, 1)  # Ensure rvec has the correct shape
+        print(f"Shape of rvec after reshape: {rvec.shape}")
 
-            landmarks = []
-            for idx, landmark in enumerate(results.pose_landmarks.landmark):
-                # making coords from standert values [0, 1] to pixel values
-                x_px = int(landmark.x * IMAGE_WIDTH)
-                y_px = int(landmark.y * IMAGE_HEIGHT)
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
+    translation_vector = tvec[0].flatten()
 
-                # check if coords are in im borders
-                if 0 <= x_px < IMAGE_WIDTH and 0 <= y_px < IMAGE_HEIGHT:
-                    # Get depth frame as numpy array
-                    depth_array = np.asanyarray(depth_frame.get_data())
+    global_landmarks = {}
+    for key, cam_coords in landmarks.items():
+        global_coords = np.dot(rotation_matrix, cam_coords) + translation_vector.reshape(-1, 1) #TODO reshape needed?
+        global_landmarks[key] = global_coords.flatten().tolist()
+    return global_landmarks
 
-                    # Calculate median depth
-                    median_depth = calculate_median_depth(depth_array, x_px, y_px)
-
-                    landmarks.append([x_px, y_px, median_depth])
-                    
-                    print(f"Landmark {idx}: x={landmark.x}, y={landmark.y}, depth={depth_frame.get_distance(x_px, y_px)}, median_depth={median_depth}")
-                else:
-                    print(f"Landmark {idx} out of bounds with coordinates x={x_px}, y={y_px}")
-
-             # Convert to head-relative coordinates
-            head_landmark = landmarks[0]  # Nose
-            head_relative_landmarks = convert_to_head_relative_coordinates(landmarks, head_landmark)
+#=============== PROCESSING LANDMARKS FROM POSE ===============
+def process_pose(color_image: np.ndarray, rgb_image: np.ndarray, depth_image: np.ndarray, pose, depth_scale: float):
+    """
+    Processing the img to get landmarks and its coordinates.
+    """
+    results = pose.process(rgb_image)
+    if not results.pose_landmarks:
+        return {}
+    
+    pixel_coords = {}
+    landmarks = {}
+    for idx, landmark in enumerate(results.pose_landmarks.landmark):
+        x, y = int(landmark.x * IMAGE_WIDTH), int(landmark.y * IMAGE_HEIGHT) # pixels
+        # check if coords are in img borders
+        if 0 <= x < IMAGE_WIDTH and 0 <= y < IMAGE_HEIGHT:
+            median_depth = calculate_median_depth(x, y, depth_image) * depth_scale # depth data in meters
+            pixel_coords[idx] = (x, y, median_depth)
+            cam_coords = pixels_to_camera_coordinates(x, y, median_depth)
+            landmarks[LANDMARKS_COLLECTION[idx]] = cam_coords
             
-            print("Head-relative coordinates:")
-            for idx, landmark in enumerate(head_relative_landmarks):
-                print(f"{landmarks_collection[idx]}: {landmark}")
+            print(f"Landmark {idx}: pixel_coords(xy)={x, y}, camera_coords(xyz)={cam_coords}, name={LANDMARKS_COLLECTION[idx]}")
+        else:
+            print(f"Landmark {idx}: out of bounds")
+     
+    # Draw landmarks
+    if VISUAL_LANDMARKS:
+        mp.solutions.drawing_utils.draw_landmarks(
+            color_image, 
+            results.pose_landmarks, 
+            mp.solutions.pose.POSE_CONNECTIONS,
+            mp.solutions.drawing_utils.DrawingSpec(color=(121, 22, 76), thickness=1, circle_radius=3),
+            mp.solutions.drawing_utils.DrawingSpec(color=(250, 44, 250), thickness=1, circle_radius=1),
+        )
+        # Show 3D coordinates as overlay
+        for i in [0, 11, 23]:
+            if i in pixel_coords: 
+                x, y, depth = pixel_coords[i]
+                x_m, y_m, _ = landmarks[LANDMARKS_COLLECTION[i]]
+                name = LANDMARKS_COLLECTION.get(i, f"Point {i}") 
+                cv2.putText(color_image, f"{name}:({x_m:.1f}m, {y_m:.1f}m) d={depth:.2f}m", 
+                            (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+               
+    return landmarks
 
-            # Save head and shoulders data every 30 frames
-            frame_count += 1
-            if frame_count % 30 == 0:
-                head_data = {
-                    "head": head_relative_landmarks[0],
-                    "left_shoulder": head_relative_landmarks[11],
-                    "right_shoulder": head_relative_landmarks[12]
-                }
-                data_to_save.append(head_data)
-                print(f"Saved frame {frame_count // 30} data")
+#======================== MAIN ========================
+def main():
+    """
+    Main func for rendering frames and save data.
+    """
+    pipeline, pose, depth_scale = setup_camera_and_pose()
+    data_to_save = []
+    last_save_time = time()
+    
+    try: # Process video frames
+        while True:
+            # Capture frames from RealSense
+            frames = pipeline.wait_for_frames()
+            color_frame = frames.get_color_frame()
+            depth_frame = frames.get_depth_frame()
+            if not color_frame or not depth_frame:
+                continue
+            
+            # Convert images to OpenCV format
+            color_image = np.asanyarray(color_frame.get_data())
+            depth_image = np.asanyarray(depth_frame.get_data())
+            rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+            
+            # ArUco markers detection
+            rvec, tvec, ids = detect_aruco_markers(color_image)
+            
+            # Calculate 3D coordinates with depth
+            landmarks = process_pose(color_image, rgb_image, depth_image, pose, depth_scale)
+            if landmarks:
+                print(f"Extracted Landmarks: {landmarks}")
+            
+            global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
+            if global_landmarks:
+                print(f"Global Landmarks: {global_landmarks}")
+            
+            # data saving each 0.5 seconds
+            current_time = time()
+            if (current_time - last_save_time) > 0.5:
+                print(current_time - last_save_time)
+                # data_to_save.append(landmarks)
+                # with open('landmarks_data.json', 'w') as file:
+                #     json.dump(data_to_save, file, indent=4)
+                last_save_time = current_time
+                
+            # Display the image
+            cv2.imshow('Real World Landmark Coordinates', color_image)
+            
+            # Break on 'q' key press
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
-        cv2.imshow("MediaPipe Pose", color_image)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    finally:
+        pipeline.stop()
+        cv2.destroyAllWindows()
 
-pipeline.stop()
-cv2.destroyAllWindows()
-
-# Save collected data to file
-output_file = "pose_data.json"
-with open(output_file, "w") as f:
-    json.dump(data_to_save, f)
-print(f"Data saved to {output_file}")
+if __name__ == "__main__":
+    main()

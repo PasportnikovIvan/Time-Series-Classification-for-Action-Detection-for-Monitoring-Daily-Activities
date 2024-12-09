@@ -60,37 +60,11 @@ def calculate_median_depth(depth_frame, x, y, radius=5):
     # Flatten the window and remove zero values
     depths = window.flatten()[window.flatten() != 0]
     
-    # Sort depths and select 25% closest points
-    sorted_depths = np.sort(depths)
-    num_points = len(sorted_depths)
-    quarter_index = int(num_points * 0.25)
-    
     # Return the median of the closest points
-    if quarter_index > 0:
-        return np.median(sorted_depths[:quarter_index + 1])
+    if len(depths) > 0:
+        sorted_depths = np.sort(depths)
+        return np.median(sorted_depths[:len(sorted_depths) // 4])
     return 0  # Return 0 if no valid depths are found
-
-def convert_to_head_relative_coordinates(landmarks, head_landmark):
-    """
-    Convert all landmarks to be relative to the head position.
-    
-    Args:
-    landmarks (list): List of landmarks with x, y, z coordinates
-    head_landmark (list): Head landmark with x, y, z coordinates
-    
-    Returns:
-    list: Landmarks with coordinates relative to the head
-    """
-    head_relative_landmarks = []
-    
-    for landmark in landmarks:
-        relative_x = landmark[0] - head_landmark[0]
-        relative_y = landmark[1] - head_landmark[1]
-        relative_z = landmark[2] - head_landmark[2]
-        
-        head_relative_landmarks.append([relative_x, relative_y, relative_z])
-    
-    return head_relative_landmarks
 
 def detect_aruco_markers(image):
     """
@@ -107,12 +81,44 @@ def detect_aruco_markers(image):
 
     if ids is not None:
         for i, corner in enumerate(corners):
-            rvec, tvec, _ = cv2.aruco.estimatePoseSingleMarkers(corner, marker_size, camera_matrix, dist_coeffs)
+            marker_points = np.array(
+                [
+                    [-marker_size / 2, marker_size / 2, 0],
+                    [marker_size / 2, marker_size / 2, 0],
+                    [marker_size / 2, -marker_size / 2, 0],
+                    [-marker_size / 2, -marker_size / 2, 0],
+                ],
+                dtype=np.float32,
+            )
+            _, rvec, tvec = cv2.solvePnP(marker_points, corner, camera_matrix, dist_coeffs)
             cv2.aruco.drawDetectedMarkers(image, corners, ids)
             cv2.drawFrameAxes(image, camera_matrix, dist_coeffs, rvec, tvec, 0.1)
             print(f"ArUco ID={ids[i][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
         return rvec, tvec, ids
     return None, None, None
+
+def pixels_to_camera_coordinates(x, y, depth, camera_matrix):
+    """
+    Terning pixel coords into camera axes.
+    
+    Args:
+    x (int): X-coord in pixels.
+    y (int): Y-coord in pixels.
+    depth (float): depth in meters.
+    camera_matrix (np.ndarray): Cam matrix (intrinsic params).
+    
+    Returns:
+    tuple: Cam coords (X, Y, Z).
+    """
+    fx, fy = camera_matrix[0, 0], camera_matrix[1, 1]
+    cx, cy = camera_matrix[0, 2], camera_matrix[1, 2]
+    
+    # making meters
+    cam_x = (x - cx) * depth / fx
+    cam_y = (y - cy) * depth / fy
+    cam_z = depth  # Z-is the same
+    
+    return cam_x, cam_y, cam_z
 
 def convert_landmarks_to_global(landmarks, rvec, tvec):
     """
@@ -128,8 +134,13 @@ def convert_landmarks_to_global(landmarks, rvec, tvec):
     """
     if rvec is None or tvec is None:
         return landmarks
+    
+    print(f"Shape of rvec before reshape: {rvec.shape}")
+    if rvec.shape not in [(3, 1), (1, 3)]:
+        rvec = rvec.reshape(3, 1)  # Ensure rvec has the correct shape
+    print(f"Shape of rvec after reshape: {rvec.shape}")
 
-    rotation_matrix, _ = cv2.Rodrigues(rvec[0])
+    rotation_matrix, _ = cv2.Rodrigues(rvec)
     translation_vector = tvec[0].flatten()
 
     global_landmarks = []
@@ -193,9 +204,9 @@ depth_sensor = profile.get_device().first_depth_sensor()
 depth_scale = depth_sensor.get_depth_scale()
 
 # ArUco markers
-aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_4X4_250)
+aruco_dict = cv2.aruco.getPredefinedDictionary(cv2.aruco.DICT_ARUCO_ORIGINAL)
 aruco_params = cv2.aruco.DetectorParameters()
-marker_size = 0.038  # Marker size in METERS
+marker_size = 0.0861  # Marker size in METERS
 # 1280x720
 camera_matrix = np.array([
     [642.33569336, 0.0,          641.48535156], 
@@ -253,35 +264,29 @@ with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.7, min_tra
             )
             
             # Calculate 3D coordinates with depth
-            landmarks = []    
+            landmarks = []
+            pixel_coords = []
             for idx, landmark in enumerate(results.pose_landmarks.landmark):
-                x, y = int(landmark.x * IMAGE_WIDTH), int(landmark.y * IMAGE_HEIGHT)
+                x, y = int(landmark.x * IMAGE_WIDTH), int(landmark.y * IMAGE_HEIGHT) #pixels   
                 # check if coords are in im borders
                 if 0 <= x < IMAGE_WIDTH and 0 <= y < IMAGE_HEIGHT:
                     median_depth = calculate_median_depth(depth_image, x, y)  # Use the depth data
                     depth = median_depth * depth_scale # Convert depth to meters
-                    landmarks.append((x, y, depth)) 
+                    pixel_coords.append((x, y, depth))
+                    cam_coords = pixels_to_camera_coordinates(x, y, depth, camera_matrix)
+                    landmarks.append(cam_coords) 
                     
-                    print(f"Landmark {idx}: x={x}, y={y}, depth={depth:.2f}m, name={landmarks_collection[idx]}")
+                    print(f"Landmark {idx}: x={cam_coords[0]}, y={cam_coords[1]}, depth={depth:.2f}m, name={landmarks_collection[idx]}")
                 else:
                     print(f"Landmark {idx}: out of bounds")
                     
-            # Преобразуем координаты в глобальные
+            # Convert to global coordinates
             print("================  Global Coordinates:  =================")
             global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
 
             for idx, landmark in enumerate(global_landmarks):
                 print(f"Landmark {idx}: {landmark}, {landmarks_collection[idx]}")
             print("====================  END Global  ======================")
-
-            # Convert to head-relative coordinates
-            print("=============  Head-relative coordinates:  =============")
-            head_landmark = landmarks[0]  # Nose
-            head_relative_landmarks = convert_to_head_relative_coordinates(landmarks, head_landmark)
-                       
-            for idx, landmark in enumerate(head_relative_landmarks):
-                print(f"Landmark {idx}: {landmark}, {landmarks_collection[idx]}")
-            print("================  END Head-relative  ===================")
 
             current_time = time()
             # Fall detection and data saving each 2 seconds
@@ -306,9 +311,13 @@ with mp_pose.Pose(static_image_mode=False, min_detection_confidence=0.7, min_tra
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 0) if not fall_detected else (0, 0, 255), 2)
             
             # Show 3D coordinates as overlay
-            for i, (x, y, depth) in enumerate(landmarks[-3:]):
-                cv2.putText(color_image, f"Point {i}: Depth={depth:.2f}m", (x, y), 
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
+            for i in [0, 11, 23]:
+                if i < len(pixel_coords): 
+                    x, y, depth = pixel_coords[i]  
+                    x, y = int(x), int(y)  
+                    name = landmarks_collection.get(i, f"Point {i}") 
+                    cv2.putText(color_image, f"{name}: ({x:.2f}, {y:.2f}) depth={depth:.2f}m", 
+                                (x, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 1)
                 
         # Display the image
         cv2.imshow('Fall Detection', color_image)
