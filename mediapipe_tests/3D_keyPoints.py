@@ -11,12 +11,23 @@ from typing import List, Tuple, Dict
 #------------------------ Window ------------------------
 IMAGE_WIDTH = 640
 IMAGE_HEIGHT = 480
+FRAME_RATE = 30
 VISUAL_LANDMARKS = True
+PRINT_LANDMARKS_TO_CONSOLE = False
 
 #------------------------ Aruco ------------------------
 ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
 ARUCO_PARAMS = aruco.DetectorParameters()
 MARKER_SIZE = 0.0861  # Marker size in METERS
+MARKER_POINTS = np.array(
+    [
+        [-MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
+        [MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
+        [MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
+        [-MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
+    ],
+    dtype=np.float32,
+)
 # 1280x720
 CAMERA_MATRIX = np.array([
     [642.33569336, 0.0,          641.48535156], 
@@ -31,41 +42,67 @@ CAMERA_MATRIX = np.array([
 # ])
 DIST_COEFFS = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222161])
     
+#------------------------ Saving Action ------------------------
+FILE_NAME_LANDMARKS = 'standing_01_cameralandmarksdata_ivan.json'
+FILE_NAME_GLOBAL = 'standing_01_globallandmarksdata_ivan.json'
+PARAMETER_TIMESTEP = 0.1
+ACTION_LENGTH = 100 # actions
+#HEADER: action, subject, (tMatrix, rMatrix optionally for camera coordinates), location, session... etc = METADATA
+METADATA = {
+    "action": "standing",
+    "session": "01",
+    "subject": "ivan",
+    "location": "bubenec_dorm",
+    "camera_intrinsics": {
+        "camera_matrix": CAMERA_MATRIX.tolist(),
+        "fx": CAMERA_MATRIX[0, 0],
+        "fy": CAMERA_MATRIX[1, 1],
+        "cx": CAMERA_MATRIX[0, 2],
+        "cy": CAMERA_MATRIX[1, 2],
+        "distortion": DIST_COEFFS.tolist()
+    },
+    "matrix": {
+        "rotation": [],
+        "translation": []
+    }
+}
+
 #------------------------ Landmarks ------------------------
-LANDMARKS_COLLECTION = {0: "nose",
-                        1: "left eye (inner)",
-                        2: "left eye",
-                        3: "left eye (outer)",
-                        4: "right eye (inner)",
-                        5: "right eye",
-                        6: "right eye (outer)",
-                        7: "left ear",
-                        8: "right ear",
-                        9: "mouth (left)",
-                        10: "mouth (right)",
-                        11: "left shoulder",
-                        12: "right shoulder",
-                        13: "left elbow",
-                        14: "right elbow",
-                        15: "left wrist",
-                        16: "right wrist",
-                        17: "left pinky",
-                        18: "right pinky",
-                        19: "left index",
-                        20: "right index",
-                        21: "left thumb",
-                        22: "right thumb",
-                        23: "left hip",
-                        24: "right hip",
-                        25: "left knee",
-                        26: "right knee",
-                        27: "left ankle",
-                        28: "right ankle",
-                        29: "left heel",
-                        30: "right heel",
-                        31: "left foot index",
-                        32: "right foot index",
-                        }
+LANDMARKS_COLLECTION = {
+    0: "nose",
+    1: "left eye (inner)",
+    2: "left eye",
+    3: "left eye (outer)",
+    4: "right eye (inner)",
+    5: "right eye",
+    6: "right eye (outer)",
+    7: "left ear",
+    8: "right ear",
+    9: "mouth (left)",
+    10: "mouth (right)",
+    11: "left shoulder",
+    12: "right shoulder",
+    13: "left elbow",
+    14: "right elbow",
+    15: "left wrist",
+    16: "right wrist",
+    17: "left pinky",
+    18: "right pinky",
+    19: "left index",
+    20: "right index",
+    21: "left thumb",
+    22: "right thumb",
+    23: "left hip",
+    24: "right hip",
+    25: "left knee",
+    26: "right knee",
+    27: "left ankle",
+    28: "right ankle",
+    29: "left heel",
+    30: "right heel",
+    31: "left foot index",
+    32: "right foot index"
+}
 
 #=============== CAMERA SETUP AND MEDIAPIPE ===============
 def setup_camera_and_pose():
@@ -75,8 +112,8 @@ def setup_camera_and_pose():
     # RealSense cam setup
     pipeline = rs.pipeline()
     config = rs.config()
-    config.enable_stream(rs.stream.color, IMAGE_WIDTH, IMAGE_HEIGHT, rs.format.bgr8, 30)
-    config.enable_stream(rs.stream.depth, IMAGE_WIDTH, IMAGE_HEIGHT, rs.format.z16, 30)
+    config.enable_stream(rs.stream.color, IMAGE_WIDTH, IMAGE_HEIGHT, rs.format.bgr8, FRAME_RATE)
+    config.enable_stream(rs.stream.depth, IMAGE_WIDTH, IMAGE_HEIGHT, rs.format.z16, FRAME_RATE)
     profile = pipeline.start(config)
     
     # Get depth sensor's depth scale (conversion factor)
@@ -103,24 +140,15 @@ def detect_aruco_markers(image):
     """
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     corners, ids, _ = cv2.aruco.detectMarkers(gray_image, ARUCO_DICT, parameters=ARUCO_PARAMS)
-
-    if ids is not None:
-        for i, corner in enumerate(corners):
-            marker_points = np.array(
-                [
-                    [-MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
-                    [MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
-                    [MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
-                    [-MARKER_SIZE / 2, -MARKER_SIZE / 2, 0],
-                ],
-                dtype=np.float32,
-            )
-            _, rvec, tvec = cv2.solvePnP(marker_points, corner, CAMERA_MATRIX, DIST_COEFFS)
-            cv2.aruco.drawDetectedMarkers(image, corners, ids)
-            cv2.drawFrameAxes(image, CAMERA_MATRIX, DIST_COEFFS, rvec, tvec, 0.1)
-            print(f"ArUco ID={ids[i][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
-        return rvec, tvec, ids
-    return None, None, None
+    if ids is None:
+        return None, None, None
+    
+    for i, corner in enumerate(corners):
+        _, rvec, tvec = cv2.solvePnP(MARKER_POINTS, corner, CAMERA_MATRIX, DIST_COEFFS)
+        cv2.aruco.drawDetectedMarkers(image, corners, ids)
+        cv2.drawFrameAxes(image, CAMERA_MATRIX, DIST_COEFFS, rvec, tvec, 0.1)
+        print(f"ArUco ID={ids[i][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
+    return rvec, tvec, ids
 
 #=============== DEPTH CALCULATION ===============
 def calculate_median_depth(x, y, depth_frame, radius=5):
@@ -187,18 +215,14 @@ def convert_landmarks_to_global(landmarks, rvec, tvec):
     """
     if rvec is None or tvec is None:
         return landmarks
-    
-    print(f"Shape of rvec before reshape: {rvec.shape}")
-    if rvec.shape not in [(3, 1), (1, 3)]:
-        rvec = rvec.reshape(3, 1)  # Ensure rvec has the correct shape
-        print(f"Shape of rvec after reshape: {rvec.shape}")
 
     rotation_matrix, _ = cv2.Rodrigues(rvec)
-    translation_vector = tvec[0].flatten()
+    translation_vector = tvec.flatten()
+    print("R matrix:", rotation_matrix.tolist(), "T vec:", translation_vector)
 
     global_landmarks = {}
     for key, cam_coords in landmarks.items():
-        global_coords = np.dot(rotation_matrix, cam_coords) + translation_vector.reshape(-1, 1) #TODO reshape needed?
+        global_coords = np.dot(rotation_matrix, cam_coords) + translation_vector.reshape(-1, 1)
         global_landmarks[key] = global_coords.flatten().tolist()
     return global_landmarks
 
@@ -222,7 +246,8 @@ def process_pose(color_image: np.ndarray, rgb_image: np.ndarray, depth_image: np
             cam_coords = pixels_to_camera_coordinates(x, y, median_depth)
             landmarks[LANDMARKS_COLLECTION[idx]] = cam_coords
             
-            print(f"Landmark {idx}: pixel_coords(xy)={x, y}, camera_coords(xyz)={cam_coords}, name={LANDMARKS_COLLECTION[idx]}")
+            if (PRINT_LANDMARKS_TO_CONSOLE):
+                print(f"Landmark {idx}: pixel_coords(xy)={x, y}, camera_coords(xyz)={cam_coords}, name={LANDMARKS_COLLECTION[idx]}")
         else:
             print(f"Landmark {idx}: out of bounds")
      
@@ -252,14 +277,21 @@ def main():
     Main func for rendering frames and save data.
     """
     pipeline, pose, depth_scale = setup_camera_and_pose()
-    data_to_save = []
-    last_save_time = time()
     
+    frame_data = {
+        "camera_landmarks": [],
+        "global_landmarks": []
+    }
+
+    start_time = time()
+    last_save_time = 0
+    frame_count = 0
     try: # Process video frames
         while True:
             # Capture frames from RealSense
             frames = pipeline.wait_for_frames()
-            color_frame = frames.get_color_frame()
+            color_frame = frames.get_color_frame() 
+            time_of_frame = frames.get_timestamp() / 1000 - start_time #seconds
             depth_frame = frames.get_depth_frame()
             if not color_frame or not depth_frame:
                 continue
@@ -274,21 +306,37 @@ def main():
             
             # Calculate 3D coordinates with depth
             landmarks = process_pose(color_image, rgb_image, depth_image, pose, depth_scale)
-            if landmarks:
+            if PRINT_LANDMARKS_TO_CONSOLE and landmarks:
                 print(f"Extracted Landmarks: {landmarks}")
             
             global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
-            if global_landmarks:
+            if PRINT_LANDMARKS_TO_CONSOLE and global_landmarks:
                 print(f"Global Landmarks: {global_landmarks}")
             
-            # data saving each 0.5 seconds
-            current_time = time()
-            if (current_time - last_save_time) > 0.5:
-                print(current_time - last_save_time)
-                # data_to_save.append(landmarks)
-                # with open('landmarks_data.json', 'w') as file:
-                #     json.dump(data_to_save, file, indent=4)
+            # data saving at defined intervals
+            current_time = time_of_frame
+            if (current_time - last_save_time) >= PARAMETER_TIMESTEP:
+                # saving frame data
+                frame_data["camera_landmarks"].append({
+                    "timestamp": time_of_frame,
+                    "landmarks": landmarks
+                })
+                frame_data["global_landmarks"].append({
+                    "timestamp": time_of_frame,
+                    "landmarks": global_landmarks
+                })
+                
+                frame_count += 1
                 last_save_time = current_time
+                
+                # Check if we've reached the desired ACTION_LENGTH
+                if frame_count >= ACTION_LENGTH:
+                    with open(FILE_NAME_LANDMARKS, 'w') as cam_file:
+                        json.dump({"header": METADATA, "data": frame_data["camera_landmarks"]}, cam_file, indent=4)
+                    with open(FILE_NAME_GLOBAL, 'w') as global_file:
+                        json.dump({"header": METADATA, "data": frame_data["global_landmarks"]}, global_file, indent=4)
+                    print(f"Saved {ACTION_LENGTH} actions")
+                    break
                 
             # Display the image
             cv2.imshow('Real World Landmark Coordinates', color_image)
