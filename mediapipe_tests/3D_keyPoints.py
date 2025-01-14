@@ -43,16 +43,25 @@ CAMERA_MATRIX = np.array([
 DIST_COEFFS = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222161])
     
 #------------------------ Saving Action ------------------------
-FILE_NAME_LANDMARKS = 'standing_01_cameralandmarksdata_ivan.json'
-FILE_NAME_GLOBAL = 'standing_01_globallandmarksdata_ivan.json'
+FILE_NAME_LANDMARKS = 'lying_04_cameralandmarksdata_ivan.json'
+FILE_NAME_GLOBAL = 'lying_04_globallandmarksdata_ivan.json'
 PARAMETER_TIMESTEP = 0.1
 ACTION_LENGTH = 100 # actions
 #HEADER: action, subject, (tMatrix, rMatrix optionally for camera coordinates), location, session... etc = METADATA
 METADATA = {
-    "action": "standing",
-    "session": "01",
+    "action": "lying",
+    "session": "04",
     "subject": "ivan",
+    "subject_age": "21",
+    "subject_gender": "male",
+    "subject_health_status": "healthy",
     "location": "bubenec_dorm",
+    "lighting_conditions": "bright",
+    "camera_model": "Intel RealSense D455",
+    "resolution": "640x480",
+    "frame_rate": "30fps",
+    "recording_date": "2025-01-14",
+    "notes": "lying to side, without baggy clothes for better model recognition",
     "camera_intrinsics": {
         "camera_matrix": CAMERA_MATRIX.tolist(),
         "fx": CAMERA_MATRIX[0, 0],
@@ -62,8 +71,16 @@ METADATA = {
         "distortion": DIST_COEFFS.tolist()
     },
     "matrix": {
-        "rotation": [],
-        "translation": []
+        "rotation": [
+            [-0.8670117071470875, 0.38487316993921966, 0.3164859281719007], 
+            [-0.02207920202025121, 0.6048497900254076, -0.7960334417248871], 
+            [-0.4977983612950547, -0.69715807000074, -0.5159141565462236]
+        ],
+        "translation": [
+            -1.21286381,
+            0.1149645,
+            2.48923353
+        ]
     }
 }
 
@@ -147,7 +164,8 @@ def detect_aruco_markers(image):
         _, rvec, tvec = cv2.solvePnP(MARKER_POINTS, corner, CAMERA_MATRIX, DIST_COEFFS)
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
         cv2.drawFrameAxes(image, CAMERA_MATRIX, DIST_COEFFS, rvec, tvec, 0.1)
-        print(f"ArUco ID={ids[i][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
+        if (PRINT_LANDMARKS_TO_CONSOLE):
+            print(f"ArUco ID={ids[i][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
     return rvec, tvec, ids
 
 #=============== DEPTH CALCULATION ===============
@@ -218,7 +236,8 @@ def convert_landmarks_to_global(landmarks, rvec, tvec):
 
     rotation_matrix, _ = cv2.Rodrigues(rvec)
     translation_vector = tvec.flatten()
-    print("R matrix:", rotation_matrix.tolist(), "T vec:", translation_vector)
+    if (PRINT_LANDMARKS_TO_CONSOLE):
+        print("R matrix:", rotation_matrix.tolist(), "T vec:", translation_vector)
 
     global_landmarks = {}
     for key, cam_coords in landmarks.items():
@@ -328,6 +347,7 @@ def main():
                 
                 frame_count += 1
                 last_save_time = current_time
+                print("Frame", frame_count, "with time", last_save_time)
                 
                 # Check if we've reached the desired ACTION_LENGTH
                 if frame_count >= ACTION_LENGTH:
