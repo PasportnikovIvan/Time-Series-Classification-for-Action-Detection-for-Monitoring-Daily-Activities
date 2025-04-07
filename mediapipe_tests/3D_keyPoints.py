@@ -241,6 +241,7 @@ def convert_landmarks_to_global(landmarks, rvec, tvec):
 
     global_landmarks = {}
     for key, cam_coords in landmarks.items():
+        # Should be P_global = R^T * (P_cam - T)
         global_coords = np.dot(rotation_matrix, cam_coords) + translation_vector.reshape(-1, 1)
         global_landmarks[key] = global_coords.flatten().tolist()
     return global_landmarks
