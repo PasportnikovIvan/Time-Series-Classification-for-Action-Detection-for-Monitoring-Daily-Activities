@@ -1,4 +1,5 @@
 HELP.md
+__pycache__/
 
 ### VS Code ###
 .vscode/*
