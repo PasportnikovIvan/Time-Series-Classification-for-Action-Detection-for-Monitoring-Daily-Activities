@@ -43,8 +43,8 @@ def trim_all_files_in_directory(directory, start_index=10, end_index=89):
                 trim_json_data(file_path, start_index, end_index)
 
 # Path to directories with data
-camera_directory = 'dataset/cameraLandmarks'
-global_directory = 'dataset/globalLandmarks'
+camera_directory = '../dataset/cameraLandmarks'
+global_directory = '../dataset/globalLandmarks'
 
 if __name__ == "__main__":
     trim_all_files_in_directory(camera_directory)

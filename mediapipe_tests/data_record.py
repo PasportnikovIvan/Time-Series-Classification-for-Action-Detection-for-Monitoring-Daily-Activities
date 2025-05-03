@@ -43,15 +43,21 @@ CAMERA_MATRIX = np.array([
 DIST_COEFFS = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222161])
     
 #------------------------ Saving Action ------------------------
-FILE_NAME_LANDMARKS = 'lying_04_cameralandmarksdata_ivan.json'
-FILE_NAME_GLOBAL = 'lying_04_globallandmarksdata_ivan.json'
+# Define constants for action
+ACTION_TYPE = "lying"
+ACTION_SESSION = "04"
+ACTION_SUBJECT = "ivan"
+NOTES = "lying to side, without baggy clothes for better model recognition"
+
+FILE_NAME_LANDMARKS = f'{ACTION_TYPE}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
+FILE_NAME_GLOBAL = f'{ACTION_TYPE}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
 PARAMETER_TIMESTEP = 0.1
 ACTION_LENGTH = 100 # actions
 #HEADER: action, subject, (tMatrix, rMatrix optionally for camera coordinates), location, session... etc = METADATA
 METADATA = {
-    "action": "lying",
-    "session": "04",
-    "subject": "ivan",
+    "action": ACTION_TYPE,
+    "session": ACTION_SESSION,
+    "subject": ACTION_SUBJECT,
     "subject_age": "21",
     "subject_gender": "male",
     "subject_health_status": "healthy",
@@ -61,7 +67,7 @@ METADATA = {
     "resolution": "640x480",
     "frame_rate": "30fps",
     "recording_date": "2025-01-14",
-    "notes": "lying to side, without baggy clothes for better model recognition",
+    "notes": NOTES,
     "camera_intrinsics": {
         "camera_matrix": CAMERA_MATRIX.tolist(),
         "fx": CAMERA_MATRIX[0, 0],
@@ -121,6 +127,9 @@ LANDMARKS_COLLECTION = {
     32: "right foot index"
 }
 
+#------------------------ Threshold for Misdetection ------------------------
+POSITION_THRESHOLD = 0.9  # Max allowed movement in meters between frames
+
 #=============== CAMERA SETUP AND MEDIAPIPE ===============
 def setup_camera_and_pose():
     """
@@ -164,7 +173,7 @@ def detect_aruco_markers(image):
         _, rvec, tvec = cv2.solvePnP(MARKER_POINTS, corner, CAMERA_MATRIX, DIST_COEFFS)
         cv2.aruco.drawDetectedMarkers(image, corners, ids)
         cv2.drawFrameAxes(image, CAMERA_MATRIX, DIST_COEFFS, rvec, tvec, 0.1)
-        if (PRINT_LANDMARKS_TO_CONSOLE):
+        if PRINT_LANDMARKS_TO_CONSOLE:
             print(f"ArUco ID={ids[i][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
     return rvec, tvec, ids
 
@@ -235,16 +244,33 @@ def convert_landmarks_to_global(landmarks, rvec, tvec):
         return landmarks
 
     rotation_matrix, _ = cv2.Rodrigues(rvec)
-    translation_vector = tvec.flatten()
-    if (PRINT_LANDMARKS_TO_CONSOLE):
-        print("R matrix:", rotation_matrix.tolist(), "T vec:", translation_vector)
+    translation_vector = tvec.reshape(3, 1)
+    if PRINT_LANDMARKS_TO_CONSOLE:
+        print("R matrix:", rotation_matrix.tolist(), "T vec:", translation_vector.flatten().tolist())
 
     global_landmarks = {}
     for key, cam_coords in landmarks.items():
+        # Covert cam_coords to numpy array and reshape it
+        cam_coords = np.array(cam_coords).reshape(3, 1)
         # Should be P_global = R^T * (P_cam - T)
-        global_coords = np.dot(rotation_matrix, cam_coords) + translation_vector.reshape(-1, 1)
+        global_coords = np.dot(rotation_matrix.T, (cam_coords - translation_vector))
+        # Save the global coordinates in the new structure
         global_landmarks[key] = global_coords.flatten().tolist()
     return global_landmarks
+
+#=============== CHECK LANDMARK CONSISTENCY ===============
+def check_landmark_consistency(prev_landmarks, current_landmarks):
+    if not prev_landmarks or not current_landmarks:
+        return True
+    for key in current_landmarks:
+        if key in prev_landmarks:
+            prev_coords = np.array(prev_landmarks[key])
+            curr_coords = np.array(current_landmarks[key])
+            distance = np.linalg.norm(curr_coords - prev_coords)
+            if distance > POSITION_THRESHOLD:
+                print(f"Misdetection detected at {key}: Distance {distance:.2f}m exceeds threshold {POSITION_THRESHOLD}m")
+                return False
+    return True
 
 #=============== PROCESSING LANDMARKS FROM POSE ===============
 def process_pose(color_image: np.ndarray, rgb_image: np.ndarray, depth_image: np.ndarray, pose, depth_scale: float):
@@ -266,7 +292,7 @@ def process_pose(color_image: np.ndarray, rgb_image: np.ndarray, depth_image: np
             cam_coords = pixels_to_camera_coordinates(x, y, median_depth)
             landmarks[LANDMARKS_COLLECTION[idx]] = cam_coords
             
-            if (PRINT_LANDMARKS_TO_CONSOLE):
+            if PRINT_LANDMARKS_TO_CONSOLE:
                 print(f"Landmark {idx}: pixel_coords(xy)={x, y}, camera_coords(xyz)={cam_coords}, name={LANDMARKS_COLLECTION[idx]}")
         else:
             print(f"Landmark {idx}: out of bounds")
@@ -306,6 +332,7 @@ def main():
     start_time = time()
     last_save_time = 0
     frame_count = 0
+    prev_landmarks = None
     try: # Process video frames
         while True:
             # Capture frames from RealSense
@@ -328,6 +355,13 @@ def main():
             landmarks = process_pose(color_image, rgb_image, depth_image, pose, depth_scale)
             if PRINT_LANDMARKS_TO_CONSOLE and landmarks:
                 print(f"Extracted Landmarks: {landmarks}")
+
+            # Check for misdetections
+            # if not check_landmark_consistency(prev_landmarks, landmarks):
+            #     print("Skipping frame due to misdetection")
+            #     continue
+
+            # prev_landmarks = landmarks.copy()
             
             global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
             if PRINT_LANDMARKS_TO_CONSOLE and global_landmarks:
