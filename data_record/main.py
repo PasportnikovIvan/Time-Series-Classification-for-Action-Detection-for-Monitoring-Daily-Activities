@@ -28,7 +28,7 @@ def main():
     try: # Process video frames
         while True:
             time_of_frame, color_image, depth_image, results, (rvec, tvec) = collect_frame(pipeline, pose, start_time)
-            if color_image is None:
+            if color_image is None and rvec is None and tvec is None:
                 continue
 
             # Calculate 3D coordinates with depth
