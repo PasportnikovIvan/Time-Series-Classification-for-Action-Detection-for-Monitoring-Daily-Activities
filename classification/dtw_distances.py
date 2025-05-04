@@ -1,11 +1,11 @@
-# classification/vizualization.py
+#classification/vizualization.py
+
 import json
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 import numpy as np
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
-from vizualization import plot_nose_trajectory
 import os
 
 def plot_nose_velocity(file_paths, action, color='b'):
@@ -91,3 +91,27 @@ def compute_dtw_distances(reference_file, other_files):
     # Sort by DTW distance
     distances.sort(key=lambda x: x[1])
     return distances
+
+def classify_with_dtw(train_files, test_files):
+    """
+    Classifies test files using DTW by comparing with train files.
+
+    Args:
+    train_files (list): List of (file_path, action) for training data.
+    test_files (list): List of (file_path, action) for test data.
+
+    Returns:
+    list: Predicted actions for test files, list of true actions.
+    """
+    predictions = []
+    true_labels = [action for _, action in test_files]
+
+    for test_path, _ in test_files:
+        distances = compute_dtw_distances(test_path, [train_path for train_path, _ in train_files])
+        if distances:
+            closest_file, _, closest_action = distances[0]  # Closest by DTW
+            predictions.append(closest_action)
+        else:
+            predictions.append(None)  # Fallback if no valid comparison
+
+    return predictions, true_labels

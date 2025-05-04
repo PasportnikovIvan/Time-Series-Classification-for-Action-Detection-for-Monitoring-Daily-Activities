@@ -1,7 +1,7 @@
-# classification/vizualization.py
+#classification/vizualization.py
+
 import json
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 def plot_nose_trajectory(file_path, title, color='b'):
     """
