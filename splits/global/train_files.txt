@@ -1,0 +1,10 @@
+dataset/globalLandmarks\sppb\sppb_01_globallandmarksdata_ivan.json
+dataset/globalLandmarks\sppb\sppb_03_globallandmarksdata_ivan.json
+dataset/globalLandmarks\timed-up-and-go\timed-up-and-go_01_globallandmarksdata_ivan.json
+dataset/globalLandmarks\timed-up-and-go\timed-up-and-go_03_globallandmarksdata_ivan.json
+dataset/globalLandmarks\falling\falling_01_globallandmarksdata_ivan.json
+dataset/globalLandmarks\falling\falling_03_globallandmarksdata_ivan.json
+dataset/globalLandmarks\sitting\sitting_01_globallandmarksdata_ivan.json
+dataset/globalLandmarks\sitting\sitting_03_globallandmarksdata_ivan.json
+dataset/globalLandmarks\standing\standing_01_globallandmarksdata_ivan.json
+dataset/globalLandmarks\standing\standing_03_globallandmarksdata_ivan.json
