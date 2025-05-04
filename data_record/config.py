@@ -14,7 +14,7 @@ PRINT_LANDMARKS_TO_CONSOLE = False
 #------------------------ Aruco ------------------------
 ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
 ARUCO_PARAMS = aruco.DetectorParameters()
-MARKER_SIZE = 0.0861  # Marker size in METERS
+MARKER_SIZE = 0.154  # Marker size in METERS
 MARKER_POINTS = np.array(
     [
         [-MARKER_SIZE / 2, MARKER_SIZE / 2, 0],
@@ -40,10 +40,10 @@ DIST_COEFFS = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222
 
 #------------------------ Saving Action ------------------------
 # Define constants for action
-ACTION_TYPE = "lying"
-ACTION_SESSION = "04"
+ACTION_TYPE = "standing"
+ACTION_SESSION = "01"
 ACTION_SUBJECT = "ivan"
-NOTES = "lying to side, without baggy clothes for better model recognition"
+NOTES = "subject is standing still, no movement"
 
 FILE_NAME_LANDMARKS = f'{ACTION_TYPE}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
 FILE_NAME_GLOBAL = f'{ACTION_TYPE}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
@@ -62,7 +62,7 @@ METADATA = {
     "camera_model": "Intel RealSense D455",
     "resolution": "640x480",
     "frame_rate": "30fps",
-    "recording_date": "2025-01-14",
+    "recording_date": "2025-03-01",
     "notes": NOTES,
     "camera_intrinsics": {
         "camera_matrix": CAMERA_MATRIX.tolist(),
@@ -124,4 +124,4 @@ LANDMARKS_COLLECTION = {
 }
 
 #------------------------ Threshold for Misdetection ------------------------
-POSITION_THRESHOLD = 0.9  # Max allowed movement in meters between frames
+POSITION_THRESHOLD = 2.5  # Max allowed movement in meters between frames

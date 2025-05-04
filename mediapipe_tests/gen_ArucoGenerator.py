@@ -5,7 +5,7 @@ def generate_single_marker(aruco_dict):
     marker_size = int(input("Enter the marker size: "))
     marker_id = int(input("Enter the marker ID: "))
 
-    marker_img = cv2.aruco.generateImageMalrker(aruco_dict, marker_id, marker_size)
+    marker_img = cv2.aruco.generateImageMarker(aruco_dict, marker_id, marker_size)
 
     cv2.imwrite("marker_{}.png".format(marker_id), marker_img)
 

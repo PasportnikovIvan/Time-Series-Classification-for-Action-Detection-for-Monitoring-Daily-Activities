@@ -36,14 +36,14 @@ def main():
             if PRINT_LANDMARKS_TO_CONSOLE and landmarks:
                 print(f"Extracted Landmarks: {landmarks}")
 
-            if not check_landmark_consistency(prev_landmarks, landmarks):
-                print("Skipping frame due to misdetection")
-                continue
-            prev_landmarks = landmarks.copy()
-
             global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
             if PRINT_LANDMARKS_TO_CONSOLE and global_landmarks:
                 print(f"Global Landmarks: {global_landmarks}")
+
+            if not check_landmark_consistency(prev_landmarks, global_landmarks):
+                print("Skipping frame due to misdetection")
+                continue
+            prev_landmarks = global_landmarks
 
             # data saving at defined intervals
             current_time = time_of_frame
