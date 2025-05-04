@@ -2,28 +2,9 @@
 # # Module for data processing data
 
 import cv2
-import numpy as np
 import mediapipe as mp
 from config import *
 from utils import pixels_to_camera_coordinates, calculate_median_depth
-
-#=============== CHECK LANDMARK CONSISTENCY ===============
-def check_landmark_consistency(prev_landmarks, current_landmarks, threshold=POSITION_THRESHOLD):
-    """
-    Check if the distance between landmarks in consecutive frames exceeds a threshold.
-    """
-    if not prev_landmarks or not current_landmarks:
-        return True
-    
-    for key in current_landmarks:
-        if key in prev_landmarks:
-            prev_coords = np.array(prev_landmarks[key])
-            curr_coords = np.array(current_landmarks[key])
-            distance = np.linalg.norm(curr_coords - prev_coords)
-            if distance > threshold:
-                print(f"Misdetection detected at {key}: Distance {distance:.2f}m exceeds threshold {threshold}m")
-                return False
-    return True
 
 #=============== PROCESSING LANDMARKS FROM POSE ===============
 def process_landmarks(results, color_image, depth_image, depth_scale, camera_matrix=CAMERA_MATRIX):

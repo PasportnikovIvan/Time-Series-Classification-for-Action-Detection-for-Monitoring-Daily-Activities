@@ -6,7 +6,7 @@ import numpy as np
 from config import IMAGE_WIDTH, IMAGE_HEIGHT, CAMERA_MATRIX, PRINT_LANDMARKS_TO_CONSOLE
 
 #=============== DEPTH CALCULATION ===============
-def calculate_median_depth(x, y, depth_frame, radius=5):
+def calculate_median_depth(x, y, depth_frame, radius=6, min_valid_pixels=3):
     """
     Calculate median depth for 25% of closest points around a given point.
     
@@ -15,22 +15,31 @@ def calculate_median_depth(x, y, depth_frame, radius=5):
     x (int): X-coordinate of the center point
     y (int): Y-coordinate of the center point
     radius (int): Radius of the window around the center point
+    min_valid_pixels (int): Minimum number of valid pixels to calculate median
     
     Returns:
     float: Median depth value
     """
+    # Get the window boundaries
+    y_min = max(0, y - radius)
+    y_max = min(IMAGE_HEIGHT, y + radius + 1)
+    x_min = max(0, x - radius)
+    x_max = min(IMAGE_WIDTH, x + radius + 1)
+
     # Extract a window around the point
-    window = depth_frame[max(0, y-radius):min(y+radius+1, IMAGE_HEIGHT),
-                         max(0, x-radius):min(x+radius+1, IMAGE_WIDTH)]
+    window = depth_frame[y_min:y_max, x_min:x_max]
     
     # Flatten the window and remove zero values
-    depths = window.flatten()[window.flatten() != 0]
+    depths = window[window > 0]
     
     # Return the median of the closest points
-    if len(depths) > 0:
+    if len(depths) > min_valid_pixels:
+        # Sort the depths and take the first 25%
         sorted_depths = np.sort(depths)
-        return np.median(sorted_depths[:len(sorted_depths) // 4])
-    return 0  # Return 0 if no valid depths are found
+        return np.median(sorted_depths[:max(1, len(sorted_depths) // 4)])
+    else: # If not enough valid pixels, return 0
+        print(f"Not enough valid pixels for depth calculation at ({x}, {y}). Found: {len(depths)}")
+        return 0  # Return 0 if no valid depths are found
 
 #=============== PIXELS -> CAMERA COORDS ===============
 def pixels_to_camera_coordinates(x, y, depth, camera_matrix=CAMERA_MATRIX):

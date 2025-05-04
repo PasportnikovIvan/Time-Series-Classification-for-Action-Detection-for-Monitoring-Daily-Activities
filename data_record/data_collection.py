@@ -26,7 +26,7 @@ def setup_camera_and_pose():
         static_image_mode=False, 
         min_detection_confidence=0.7, 
         min_tracking_confidence=0.5, 
-        model_complexity=2
+        model_complexity=1
     )
     return pipeline, pose, depth_scale
 

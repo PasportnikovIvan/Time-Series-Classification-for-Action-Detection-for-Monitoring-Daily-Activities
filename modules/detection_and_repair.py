@@ -9,7 +9,7 @@ SUBJECT = 'ivan'
 CAMERA_DIR = '../dataset/cameraLandmarks'
 GLOBAL_DIR = '../dataset/globalLandmarks'
 
-INPUT_FILE = f'{CAMERA_DIR}/{ACTION}/{ACTION}_{SESSION}_cameralandmarksdata_{SUBJECT}.json'
+INPUT_FILE = f'{LANDMARKS_DIR}/{ACTION}/{ACTION}_{SESSION}_{TYPE_OF_DATA}landmarksdata_{SUBJECT}.json'
 OUTPUT_FILE_CLEAN = f'{ACTION}_{SESSION}_cleaned.json'
 OUTPUT_FILE_REPAIRED = f'{ACTION}_{SESSION}_repaired.json'
 
