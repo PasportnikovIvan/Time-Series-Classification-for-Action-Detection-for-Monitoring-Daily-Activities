@@ -67,7 +67,7 @@ def get_first_session_files(action, camera_dir, global_dir, subject='ivan'):
         # Checking if 'nose' data is present in all frames
         camera_valid = all('nose' in frame['landmarks'] for frame in camera_data['data'])
         global_valid = all('nose' in frame['landmarks'] for frame in global_data['data'])
-        if passed_files < 0:
+        if passed_files < 3:
             passed_files += 1
             continue
         if camera_valid and global_valid:
@@ -130,14 +130,14 @@ def main():
     camera_directory = 'dataset/cameraLandmarks' # Relative path to dataset from classification directory
     global_directory = 'dataset/globalLandmarks'
     splits_dir = 'splits'
-    actions = ['standing']
+    actions = ['sppb', 'timed-up-and-go', 'falling', 'sitting', 'standing'] # List of actions to visualize
     subject = 'ivan' # Replace with the subject name you want to visualize
     action_colors = {
         'falling': 'r',
-        'lying': 'b',
+        'timed-up-and-go': 'b',
         'sitting': 'g',
         'standing': 'm',
-        'standing-side-by-side': 'c'
+        'sppb': 'c'
     }
 
     # Visualize trajectories (first valid session)

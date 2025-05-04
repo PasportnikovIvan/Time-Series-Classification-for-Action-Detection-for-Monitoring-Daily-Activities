@@ -3,17 +3,17 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 # Constants
-ACTION = 'standing-side-by-side'
-SESSION = '01'
+ACTION = 'sppb'
+SESSION = '04'
 SUBJECT = 'ivan'
-CAMERA_DIR = '../dataset/cameraLandmarks'
-GLOBAL_DIR = '../dataset/globalLandmarks'
+TYPE_OF_DATA = 'camera'  # 'camera' or 'global'
+LANDMARKS_DIR = f'dataset/{TYPE_OF_DATA}Landmarks'
 
 INPUT_FILE = f'{LANDMARKS_DIR}/{ACTION}/{ACTION}_{SESSION}_{TYPE_OF_DATA}landmarksdata_{SUBJECT}.json'
 OUTPUT_FILE_CLEAN = f'{ACTION}_{SESSION}_cleaned.json'
 OUTPUT_FILE_REPAIRED = f'{ACTION}_{SESSION}_repaired.json'
 
-DISTANCE_THRESHOLD = 0.9  # Meters
+DISTANCE_THRESHOLD = 0.7  # Meters
 
 def load_data(filename):
     with open(filename, 'r') as f:

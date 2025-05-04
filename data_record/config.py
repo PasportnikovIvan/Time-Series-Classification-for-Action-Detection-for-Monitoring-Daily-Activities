@@ -40,10 +40,10 @@ DIST_COEFFS = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222
 
 #------------------------ Saving Action ------------------------
 # Define constants for action
-ACTION_TYPE = "standing"
-ACTION_SESSION = "01"
+ACTION_TYPE = "sppb"
+ACTION_SESSION = "04"
 ACTION_SUBJECT = "ivan"
-NOTES = "subject is standing still, no movement"
+NOTES = "SPPB Prorocol repeated chair stand test. Subject was asked to stand up from a chair and sit down 5 times as fast as possible."
 
 FILE_NAME_LANDMARKS = f'{ACTION_TYPE}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
 FILE_NAME_GLOBAL = f'{ACTION_TYPE}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
