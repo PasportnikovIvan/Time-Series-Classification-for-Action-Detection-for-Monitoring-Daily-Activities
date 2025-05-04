@@ -153,6 +153,30 @@ def setup_camera_and_pose():
     )
     return pipeline, pose, depth_scale
 
+#=============== FRAME COLLECTION AND PROCESSING ===============
+def collect_frame(pipeline, pose, start_time):
+    """
+    Collect a frame from the camera and process it with MediaPipe Pose.
+    """
+    # Capture frames from RealSense
+    frames = pipeline.wait_for_frames()
+    time_of_frame = frames.get_timestamp() / 1000.0 - start_time
+    color_frame = frames.get_color_frame()
+    depth_frame = frames.get_depth_frame()
+    if not color_frame or not depth_frame:
+        return None, None, None, None, None
+    
+    # Convert images to OpenCV format
+    color_image = np.asanyarray(color_frame.get_data())
+    depth_image = np.asanyarray(depth_frame.get_data())
+    rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
+
+    # ArUco markers detection
+    rvec, tvec, _ = detect_aruco_markers(color_image)
+
+    results = pose.process(rgb_image)
+    return time_of_frame, color_image, depth_image, results, (rvec, tvec)
+
 #=============== ARUCO MARKER DETECTION ===============
 def detect_aruco_markers(image):
     """
@@ -258,26 +282,11 @@ def convert_landmarks_to_global(landmarks, rvec, tvec):
         global_landmarks[key] = global_coords.flatten().tolist()
     return global_landmarks
 
-#=============== CHECK LANDMARK CONSISTENCY ===============
-def check_landmark_consistency(prev_landmarks, current_landmarks):
-    if not prev_landmarks or not current_landmarks:
-        return True
-    for key in current_landmarks:
-        if key in prev_landmarks:
-            prev_coords = np.array(prev_landmarks[key])
-            curr_coords = np.array(current_landmarks[key])
-            distance = np.linalg.norm(curr_coords - prev_coords)
-            if distance > POSITION_THRESHOLD:
-                print(f"Misdetection detected at {key}: Distance {distance:.2f}m exceeds threshold {POSITION_THRESHOLD}m")
-                return False
-    return True
-
 #=============== PROCESSING LANDMARKS FROM POSE ===============
-def process_pose(color_image: np.ndarray, rgb_image: np.ndarray, depth_image: np.ndarray, pose, depth_scale: float):
+def process_landmarks(results, color_image, depth_image, depth_scale, camera_matrix=CAMERA_MATRIX):
     """
     Processing the img to get landmarks and its coordinates.
     """
-    results = pose.process(rgb_image)
     if not results.pose_landmarks:
         return {}
     
@@ -332,36 +341,17 @@ def main():
     start_time = time()
     last_save_time = 0
     frame_count = 0
-    prev_landmarks = None
+
     try: # Process video frames
         while True:
-            # Capture frames from RealSense
-            frames = pipeline.wait_for_frames()
-            color_frame = frames.get_color_frame() 
-            time_of_frame = frames.get_timestamp() / 1000 - start_time #seconds
-            depth_frame = frames.get_depth_frame()
-            if not color_frame or not depth_frame:
+            time_of_frame, color_image, depth_image, results, (rvec, tvec) = collect_frame(pipeline, pose, start_time)
+            if color_image is None and depth_image is None and rvec is None and tvec is None:
                 continue
-            
-            # Convert images to OpenCV format
-            color_image = np.asanyarray(color_frame.get_data())
-            depth_image = np.asanyarray(depth_frame.get_data())
-            rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-            
-            # ArUco markers detection
-            rvec, tvec, ids = detect_aruco_markers(color_image)
-            
+
             # Calculate 3D coordinates with depth
-            landmarks = process_pose(color_image, rgb_image, depth_image, pose, depth_scale)
+            landmarks = process_landmarks(results, color_image, depth_image, depth_scale)
             if PRINT_LANDMARKS_TO_CONSOLE and landmarks:
                 print(f"Extracted Landmarks: {landmarks}")
-
-            # Check for misdetections
-            # if not check_landmark_consistency(prev_landmarks, landmarks):
-            #     print("Skipping frame due to misdetection")
-            #     continue
-
-            # prev_landmarks = landmarks.copy()
             
             global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
             if PRINT_LANDMARKS_TO_CONSOLE and global_landmarks:
