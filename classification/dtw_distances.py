@@ -7,19 +7,23 @@ import numpy as np
 from fastdtw import fastdtw
 from scipy.spatial.distance import euclidean
 import os
+import pdb
 
-def plot_nose_velocity(file_paths, action, color='b'):
+def plot_nose_velocity(file_paths, action):
     """
     Visualizes the velocity of the nose for multiple sessions of an action.
 
     Args:
         file_paths (list): List of paths to JSON files for the action.
         action (str): Name of the action (e.g., 'falling', 'lying').
-        color (str): Color for plotting the velocity curves (default is blue).
     """
-    plt.figure(figsize=(10, 6))
+    plt.figure(figsize=(12, 8))
+
+    # Define color map for different sessions
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd', 
+              '#8c564b', '#e377c2', '#7f7f7f', '#bcbd22', '#17becf']
     
-    for file_path in file_paths:
+    for idx, file_path in enumerate(file_paths):
         with open(file_path, 'r') as f:
             data = json.load(f)
         
@@ -40,15 +44,18 @@ def plot_nose_velocity(file_paths, action, color='b'):
         vz = dz / dt
         
         velocity = np.sqrt(vx**2 + vy**2 + vz**2)
+
+        # Get session number from filename (assuming format: action_XX_...)
+        session_num = os.path.basename(file_path).split('_')[1]
         
-        plt.plot(timestamps[1:], velocity, color=color, alpha=0.6, label=f"{action} session" if action not in plt.gca().get_legend_handles_labels()[1] else "")
+        plt.plot(timestamps[1:], velocity, color=colors[idx % len(colors)], alpha=0.8, label=f"{action} session {session_num}" if action not in plt.gca().get_legend_handles_labels()[1] else "")
     
-    plt.xlabel('Time (s)')
-    plt.ylabel('Velocity (m/s)')
-    plt.title(f'Nose Velocity for {action}')
-    plt.legend()
-    plt.grid(True)
-    plt.show()
+    plt.xlabel('Time (s)', fontsize=12)
+    plt.ylabel('Velocity (m/s)', fontsize=12)
+    plt.title(f'Nose Velocity for {action.capitalize()}', fontsize=14)
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
 
 def compute_dtw_distances(reference_file, other_files):
     """
@@ -85,7 +92,7 @@ def compute_dtw_distances(reference_file, other_files):
         distance, _ = fastdtw(ref_coords, coords, dist=euclidean)
         
         # Extract action name from file path (e.g., 'falling' from 'dataset/globalLandmarks/falling/...')
-        action_name = file_path.split(os.sep)[2]  # Assuming path like 'dataset/globalLandmarks/action/...'
+        action_name = file_path.split(os.sep)[1]  # Assuming path like 'dataset/globalLandmarks/action/...'
         distances.append((file_path, distance, action_name))
     
     # Sort by DTW distance
@@ -97,21 +104,44 @@ def classify_with_dtw(train_files, test_files):
     Classifies test files using DTW by comparing with train files.
 
     Args:
-    train_files (list): List of (file_path, action) for training data.
-    test_files (list): List of (file_path, action) for test data.
+        train_files (list): List of (file_path, action) for training data.
+        test_files (list): List of (file_path, action) for test data.
 
     Returns:
-    list: Predicted actions for test files, list of true actions.
+        list: Predicted actions for test files, list of true actions.
     """
     predictions = []
+    if isinstance(test_files, tuple):
+        test_files = [test_files]  # Convert single tuple to a list of tuples
     true_labels = [action for _, action in test_files]
 
     for test_path, _ in test_files:
-        distances = compute_dtw_distances(test_path, [train_path for train_path, _ in train_files])
+        with open(test_path, 'r') as f_test:
+            test_data = json.load(f_test)
+        test_coords = [frame['landmarks']['nose'] for frame in test_data['data'] if 'nose' in frame['landmarks']]
+        if not test_coords:
+            print(f"Warning: No 'nose' data in test file {test_files[0]}")
+            predictions.append(None)
+            continue
+
+        distances = []    
+        for train_path, train_action in train_files:
+            with open(train_path, 'r') as f_train:
+                train_data = json.load(f_train)
+            train_coords = [frame['landmarks']['nose'] for frame in train_data['data'] if 'nose' in frame['landmarks']]
+            if not train_coords:
+                print(f"Warning: No 'nose' data in train file {train_path}")
+                continue
+                
+            distance, _ = fastdtw(test_coords, train_coords, dist=euclidean)
+            distances.append((distance, train_action))
+        
         if distances:
-            closest_file, _, closest_action = distances[0]  # Closest by DTW
+            print(distances)
+            closest_action = min(distances, key=lambda x: x[0])[1]  # Get action with smallest distance
+            print(f"Predicted action for {test_files[0]}: {closest_action}")
             predictions.append(closest_action)
         else:
-            predictions.append(None)  # Fallback if no valid comparison
-
+            predictions.append(None)
+    
     return predictions, true_labels
