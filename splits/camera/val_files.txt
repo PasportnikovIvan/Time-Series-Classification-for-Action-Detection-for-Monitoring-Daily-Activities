@@ -1,5 +1,0 @@
-dataset/cameraLandmarks\sppb\sppb_02_cameralandmarksdata_ivan.json
-dataset/cameraLandmarks\timed-up-and-go\timed-up-and-go_02_cameralandmarksdata_ivan.json
-dataset/cameraLandmarks\falling\falling_02_cameralandmarksdata_ivan.json
-dataset/cameraLandmarks\sitting\sitting_02_cameralandmarksdata_ivan.json
-dataset/cameraLandmarks\standing\standing_02_cameralandmarksdata_ivan.json

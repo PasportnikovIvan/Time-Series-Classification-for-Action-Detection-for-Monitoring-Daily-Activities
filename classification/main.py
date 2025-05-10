@@ -4,7 +4,7 @@ import json
 import matplotlib.pyplot as plt
 from vizualization import plot_nose_trajectory
 from simulation_visualization import simulate_trajectory
-from dtw_distances import plot_nose_velocity, compute_dtw_distances, classify_with_dtw
+from dtw_distances import plot_nose_velocity, compute_dtw_distances, classify_with_dtw, compute_dtw_distance_matrix, plot_distance_matrix
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix 
 import numpy as np
 import pdb
@@ -131,14 +131,14 @@ def main():
     camera_directory = 'dataset/cameraLandmarks' # Relative path to dataset from classification directory
     global_directory = 'dataset/globalLandmarks'
     splits_dir = 'splits/global'
-    actions = ['sppb', 'timed-up-and-go', 'falling', 'sitting', 'standing'] # List of actions to visualize
+    all_files_dir = 'splits/all_files'
+    actions = ['timed-up-and-go', 'falling', 'sitting', 'standing'] # List of actions to visualize
     subject = 'ivan' # Replace with the subject name you want to visualize
     action_colors = {
         'falling': 'r',
         'timed-up-and-go': 'b',
         'sitting': 'g',
-        'standing': 'm',
-        'sppb': 'c'
+        'standing': 'm'
     }
 
     # Visualize trajectories (first valid session)
@@ -154,7 +154,6 @@ def main():
             print(f"Files for {action} not found.")
     
     # Visualize velocities (all valid sessions)
-    # plt.figure(figsize=(12, 8))
     for action in actions:
         global_files = get_all_session_files(action, global_directory, subject)
         if global_files:
@@ -165,7 +164,7 @@ def main():
     plt.show()
 
     # Compute DTW distances
-    reference_action = 'falling'  # Choose reference action
+    reference_action = 'standing'  # Choose reference action
     ref_camera_file, ref_global_file = get_first_session_files(reference_action, camera_directory, global_directory, subject)
     if ref_global_file:
         print(f"Computing DTW distances with reference: {ref_global_file}")
@@ -182,11 +181,15 @@ def main():
     # Load split files
     train_files = load_split_files(os.path.join(splits_dir, 'train_files.txt'), global_directory)
     test_files = load_split_files(os.path.join(splits_dir, 'test_files.txt'), global_directory)
+    all_files = collect_all_files(actions, global_directory, subject)
+
+    distance_matrix, file_list = compute_dtw_distance_matrix(all_files, use_all_landmarks=True)
+    plot_distance_matrix(distance_matrix, file_list, cmap='viridis')
 
     # Visualize example trajectories
-    # for file_path, action in train_files[-6:] + test_files[-3:]:  # Last from train and test
+    # for file_path, action in train_files + test_files:  # Last from train and test
     #     print(f"Visualizing {action}: {file_path}")
-        # simulate_trajectory(file_path, f"{action} - Full Body Simulation", color=action_colors.get(action, 'b'))
+    #     simulate_trajectory(file_path, f"{action} - Full Body Simulation", color=action_colors.get(action, 'b'))
 
     # DTW Classification
     predictions, true_labels = classify_with_dtw(train_files, test_files)
