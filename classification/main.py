@@ -1,174 +1,62 @@
 #classification/main.py
+
+from data_utils import get_first_session_files, get_all_session_files, collect_all_files, load_split_files
+from visualization import plot_nose_trajectory, simulate_full_body_trajectory, plot_nose_velocity
+from dtw_distances import compute_dtw_distances, classify_with_dtw, compute_dtw_distance_matrix, plot_distance_matrix
 import os
-import json
-import matplotlib.pyplot as plt
-from vizualization import plot_nose_trajectory
-from simulation_visualization import simulate_trajectory
-from dtw_distances import plot_nose_velocity, compute_dtw_distances, classify_with_dtw, compute_dtw_distance_matrix, plot_distance_matrix
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix 
-import numpy as np
 import pdb
 
-def load_split_files(split_file, global_dir):
+def visualize_trajectories(actions, camera_dir, global_dir, action_colors, session = 1):
     """
-    Loads file paths from a split file (e.g., train_files.txt) and maps them to full paths.
-
+    Visualizes the trajectories for the first sessions of actions.
     Args:
-    split_file (str): Path to the split file (e.g., 'splits/global/train_files.txt').
-    global_dir (str): Base directory for globalLandmarks.
-
-    Returns:
-    list: List of tuples (file_path, action).
-    """
-    with open(split_file, 'r') as f:
-        lines = f.readlines()
-
-    files = []
-    for line in lines:
-        rel_path = line.strip()
-        action = rel_path.split(os.sep)[1]  # e.g., 'dataset/globalLandmarks/falling/...'
-        full_path = os.path.join(global_dir, *rel_path.split(os.sep)[1:])
-        files.append((full_path, action))
-    return files
-
-def get_first_session_files(action, camera_dir, global_dir, subject='ivan'):
-    """
-    Finds best matching files for a given action in cameraLandmarks and globalLandmarks directories.
-
-    Args:
-        action (str): Name of the action (e.g., 'falling', 'lying', etc.).
+        actions (list): List of actions to visualize.
         camera_dir (str): Path to the cameraLandmarks directory.
         global_dir (str): Path to the globalLandmarks directory.
-        subject (str): Name of the subject (default is 'ivan').
-
-    Returns:
-        tuple: Paths to the camera and global files for the action, or (None, None) if not found.
+        action_colors (dict): Dictionary mapping actions to colors.
+        session (int): Chosen session for visualization file.
     """
-    # Making paths to directories
-    action_camera_dir = os.path.join(camera_dir, action)
-    action_global_dir = os.path.join(global_dir, action)
-    
-    # Getting all files in the directories
-    camera_files = sorted([f for f in os.listdir(action_camera_dir) 
-                          if f.endswith(f'_cameralandmarksdata_{subject}.json')])
-    global_files = sorted([f for f in os.listdir(action_global_dir) 
-                          if f.endswith(f'_globallandmarksdata_{subject}.json')])
-    passed_files = 0
-    # Going through all files and checking for 'nose' data
-    for camera_file, global_file in zip(camera_files, global_files):
-        camera_path = os.path.join(action_camera_dir, camera_file)
-        global_path = os.path.join(action_global_dir, global_file)
-        
-        # Reading JSON files
-        with open(camera_path, 'r') as f:
-            camera_data = json.load(f)
-        with open(global_path, 'r') as f:
-            global_data = json.load(f)
-        
-        # Checking if 'nose' data is present in all frames
-        camera_valid = all('nose' in frame['landmarks'] for frame in camera_data['data'])
-        global_valid = all('nose' in frame['landmarks'] for frame in global_data['data'])
-        if passed_files < 0:
-            passed_files += 1
-            continue
-        if camera_valid and global_valid:
-            print(f"Found valid file pair for {action}: {camera_file}, {global_file}")
-            return camera_path, global_path
-        else:
-            print(f"Skipping {camera_file} or {global_file}: 'nose' data missing in some frames")
-    
-    print(f"No valid files found for {action} with complete 'nose' data")
-    return None, None
-
-def get_all_session_files(action, global_dir, subject='ivan'):
-    """
-    Finds all valid files for a given action in globalLandmarks directory.
-
-    Args:
-        action (str): Name of the action (e.g., 'falling', 'lying', etc.).
-        global_dir (str): Path to the globalLandmarks directory.
-        subject (str): Name of the subject (default is 'ivan').
-
-    Returns:
-        list: Paths to all valid global files for the action.
-    """
-    action_global_dir = os.path.join(global_dir, action)
-    global_files = sorted([f for f in os.listdir(action_global_dir) 
-                          if f.endswith(f'_globallandmarksdata_{subject}.json')])
-    
-    valid_files = []
-    for global_file in global_files:
-        global_path = os.path.join(action_global_dir, global_file)
-        with open(global_path, 'r') as f:
-            global_data = json.load(f)
-        
-        if all('nose' in frame['landmarks'] for frame in global_data['data']):
-            valid_files.append(global_path)
-        else:
-            print(f"Skipping {global_file}: 'nose' data missing in some frames")
-    
-    return valid_files
-
-def collect_all_files(actions, global_dir, subject='ivan'):
-    """
-    Collects all valid files across all actions in globalLandmarks directory.
-
-    Args:
-        actions (list): List of action names.
-        global_dir (str): Path to the globalLandmarks directory.
-        subject (str): Name of the subject (default is 'ivan').
-
-    Returns:
-        list: Paths to all valid global files across all actions.
-    """
-    all_files = []
     for action in actions:
-        all_files.extend(get_all_session_files(action, global_dir, subject))
-    return all_files
-
-def main():
-    # Paths to directories with data
-    camera_directory = 'dataset/cameraLandmarks' # Relative path to dataset from classification directory
-    global_directory = 'dataset/globalLandmarks'
-    splits_dir = 'splits/global'
-    all_files_dir = 'splits/all_files'
-    actions = ['timed-up-and-go', 'falling', 'sitting', 'standing'] # List of actions to visualize
-    subject = 'ivan' # Replace with the subject name you want to visualize
-    action_colors = {
-        'falling': 'r',
-        'timed-up-and-go': 'b',
-        'sitting': 'g',
-        'standing': 'm'
-    }
-
-    # Visualize trajectories (first valid session)
-    for action in actions:
-        camera_file, global_file = get_first_session_files(action, camera_directory, global_directory, subject)
+        camera_file, global_file = get_first_session_files(action, camera_dir, global_dir, session=session)
         if camera_file and global_file:
             print(f"Visualization for: {action}")
-            # plot_nose_trajectory(camera_file, f"{action} - Camera coordinates", color=action_colors[action])
-            # plot_nose_trajectory(global_file, f"{action} - Global coordinates", color=action_colors[action])
-            # simulate_trajectory(camera_file, f"{action} - Camera Trajectory Simulation", color=action_colors[action])
-            # simulate_trajectory(global_file, f"{action} - Global Trajectory Simulation", color=action_colors[action])
+            plot_nose_trajectory(camera_file, f"{action} - Camera coordinates", color=action_colors[action])
+            plot_nose_trajectory(global_file, f"{action} - Global coordinates", color=action_colors[action])
+            simulate_full_body_trajectory(camera_file, f"{action} - Camera Trajectory Simulation", color=action_colors[action])
+            simulate_full_body_trajectory(global_file, f"{action} - Global Trajectory Simulation", color=action_colors[action])
         else:
             print(f"Files for {action} not found.")
-    
-    # Visualize velocities (all valid sessions)
+
+def visualize_velocities(actions, global_dir):
+    """
+    Visualizes the velocities for the first sessions of actions.
+    Args:
+        actions (list): List of actions to visualize.
+        global_dir (str): Path to the globalLandmarks directory.
+
+    """
     for action in actions:
-        global_files = get_all_session_files(action, global_directory, subject)
-        if global_files:
+        global_file = get_all_session_files(action, global_dir)
+        if global_file:
             print(f"Velocity visualization for: {action}")
-            # plot_nose_velocity(global_files, action)
+            plot_nose_velocity(global_file, action)
         else:
             print(f"No valid files for velocity visualization of {action}")
-    plt.show()
 
-    # Compute DTW distances
-    reference_action = 'standing'  # Choose reference action
-    ref_camera_file, ref_global_file = get_first_session_files(reference_action, camera_directory, global_directory, subject)
+def compute_and_print_dtw_distances(reference_action, camera_dir, global_dir, actions):
+    """
+    Computes and prints DTW distances for a reference action against all other actions.
+    Args:
+        reference_action (str): Action to use as reference for DTW distance computation.
+        camera_dir (str): Path to the cameraLandmarks directory.
+        global_dir (str): Path to the globalLandmarks directory.
+        actions (list): List of actions to compute DTW distances against.
+    """
+    ref_camera_file, ref_global_file = get_first_session_files(reference_action, camera_dir, global_dir)
     if ref_global_file:
         print(f"Computing DTW distances with reference: {ref_global_file}")
-        all_files = collect_all_files(actions, global_directory, subject)
+        all_files = collect_all_files(actions, global_dir)
         distances = compute_dtw_distances(ref_global_file, all_files)
         
         # Print sorted DTW distances
@@ -178,19 +66,23 @@ def main():
     else:
         print(f"No valid reference file found for {reference_action}")
 
-    # Load split files
-    train_files = load_split_files(os.path.join(splits_dir, 'train_files.txt'), global_directory)
-    test_files = load_split_files(os.path.join(splits_dir, 'test_files.txt'), global_directory)
-    all_files = collect_all_files(actions, global_directory, subject)
+def compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False):
+    """
+    Computes and plots the distance matrix for all files.
+    Args:
+        all_files (list): List of paths to JSON files.
+        use_all_landmarks (bool): Whether to use all landmarks or just the nose.
+    """
+    distance_matrix, file_list = compute_dtw_distance_matrix(all_files, use_all_landmarks=use_all_landmarks)
+    plot_distance_matrix(distance_matrix, file_list, save_png, cmap='viridis')
 
-    distance_matrix, file_list = compute_dtw_distance_matrix(all_files, use_all_landmarks=True)
-    plot_distance_matrix(distance_matrix, file_list, cmap='viridis')
-
-    # Visualize example trajectories
-    # for file_path, action in train_files + test_files:  # Last from train and test
-    #     print(f"Visualizing {action}: {file_path}")
-    #     simulate_trajectory(file_path, f"{action} - Full Body Simulation", color=action_colors.get(action, 'b'))
-
+def perform_classification(train_files, test_files):
+    """
+    Performs classification using DTW on the provided training and testing files.
+    Args:
+        train_files (list): List of training file paths.
+        test_files (list): List of testing file paths.
+    """
     # DTW Classification
     predictions, true_labels = classify_with_dtw(train_files, test_files)
 
@@ -207,6 +99,34 @@ def main():
         print(confusion_matrix(true_valid, pred_valid))
     else:
         print("No valid predictions made.")
+
+def main():
+    # Paths to directories with data
+    camera_directory = 'dataset/cameraLandmarks' # Relative path to dataset from classification directory
+    global_directory = 'dataset/globalLandmarks'
+    splits_dir = 'splits/global'
+    all_files_dir = 'splits/all_files'
+    actions = ['timed-up-and-go', 'falling', 'sitting', 'standing'] # List of actions to visualize
+    action_colors = {
+        'falling': 'r',
+        'timed-up-and-go': 'b',
+        'sitting': 'g',
+        'standing': 'm'
+    }
+    all_files = collect_all_files(actions, directory = global_directory)
+    # Load split files
+    train_files = load_split_files(os.path.join(splits_dir, 'train_files.txt'), global_directory)
+    test_files = load_split_files(os.path.join(splits_dir, 'test_files.txt'), global_directory)
+
+    visualize_trajectories(actions, camera_directory, global_directory, action_colors, session = 2)
+
+    visualize_velocities(actions, global_directory)
+
+    compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
+
+    compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
+
+    perform_classification(train_files, test_files)
 
 if __name__ == "__main__":
     main()

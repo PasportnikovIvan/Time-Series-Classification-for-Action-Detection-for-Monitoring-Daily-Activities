@@ -32,7 +32,7 @@ def save_split_files(train_files, val_files, test_files, output_dir="splits"):
     with open(os.path.join(output_dir, "test_files.txt"), "w") as f:
         f.write("\n".join(test_files))
 
-actions = ['sppb', 'timed-up-and-go', 'falling', 'sitting', 'standing']
+actions = ['timed-up-and-go', 'falling', 'sitting', 'standing']
 camera_train, camera_val, camera_test = split_dataset("dataset/cameraLandmarks", actions)
 global_train, global_val, global_test = split_dataset("dataset/globalLandmarks", actions)
 
