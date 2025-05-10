@@ -9,6 +9,19 @@ from scipy.spatial.distance import euclidean
 import os
 import pdb
 
+def extract_all_landmarks(file_path):
+    with open(file_path, 'r') as f:
+        data = json.load(f)
+    landmarks = []
+    for frame in data['data']:
+        if 'landmarks' in frame:
+            frame_landmarks = []
+            # Sort landmarks by key to ensure consistent order
+            for key in sorted(frame['landmarks'].keys()):
+                frame_landmarks.extend(frame['landmarks'][key])  # Add all coordinates
+            landmarks.append(frame_landmarks)
+    return landmarks
+
 def plot_nose_velocity(file_paths, action):
     """
     Visualizes the velocity of the nose for multiple sessions of an action.
@@ -69,23 +82,17 @@ def compute_dtw_distances(reference_file, other_files):
         list: List of tuples (file_path, dtw_distance, action_name) sorted by distance.
     """
     # Load reference trajectory
-    with open(reference_file, 'r') as f:
-        ref_data = json.load(f)
-    ref_coords = [frame['landmarks']['nose'] for frame in ref_data['data'] if 'nose' in frame['landmarks']]
-    
+    ref_coords = extract_all_landmarks(reference_file)
     if not ref_coords:
-        print(f"Error: No 'nose' data in reference file {reference_file}")
+        print(f"Error: No landmark data in reference file {reference_file}")
         return []
     
     distances = []
     for file_path in other_files:
         # Load comparison trajectory
-        with open(file_path, 'r') as f:
-            data = json.load(f)
-        coords = [frame['landmarks']['nose'] for frame in data['data'] if 'nose' in frame['landmarks']]
-        
+        coords = extract_all_landmarks(file_path)
         if not coords:
-            print(f"Warning: No 'nose' data in {file_path}")
+            print(f"Warning: No landmark data in {file_path}")
             continue
         
         # Compute DTW distance
@@ -116,28 +123,23 @@ def classify_with_dtw(train_files, test_files):
     true_labels = [action for _, action in test_files]
 
     for test_path, _ in test_files:
-        with open(test_path, 'r') as f_test:
-            test_data = json.load(f_test)
-        test_coords = [frame['landmarks']['nose'] for frame in test_data['data'] if 'nose' in frame['landmarks']]
+        test_coords = extract_all_landmarks(test_path)
         if not test_coords:
-            print(f"Warning: No 'nose' data in test file {test_files[0]}")
+            print(f"Warning: No landmark data in test file {test_path}")
             predictions.append(None)
             continue
 
         distances = []    
         for train_path, train_action in train_files:
-            with open(train_path, 'r') as f_train:
-                train_data = json.load(f_train)
-            train_coords = [frame['landmarks']['nose'] for frame in train_data['data'] if 'nose' in frame['landmarks']]
+            train_coords = extract_all_landmarks(train_path)
             if not train_coords:
-                print(f"Warning: No 'nose' data in train file {train_path}")
+                print(f"Warning: No landmark data in train file {train_path}")
                 continue
                 
             distance, _ = fastdtw(test_coords, train_coords, dist=euclidean)
             distances.append((distance, train_action))
         
         if distances:
-            print(distances)
             closest_action = min(distances, key=lambda x: x[0])[1]  # Get action with smallest distance
             print(f"Predicted action for {test_files[0]}: {closest_action}")
             predictions.append(closest_action)
