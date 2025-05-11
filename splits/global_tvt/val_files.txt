@@ -1,0 +1,4 @@
+dataset/globalLandmarks\timed-up-and-go\timed-up-and-go_04_globallandmarksdata_ivan.json
+dataset/globalLandmarks\falling\falling_04_globallandmarksdata_ivan.json
+dataset/globalLandmarks\sitting\sitting_04_globallandmarksdata_ivan.json
+dataset/globalLandmarks\standing\standing_04_globallandmarksdata_ivan.json
