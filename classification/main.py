@@ -2,7 +2,7 @@
 
 from data_utils import get_first_session_files, get_all_session_files, collect_all_files, load_split_files
 from visualization import plot_nose_trajectory, simulate_full_body_trajectory, plot_nose_velocity
-from dtw_distances import compute_dtw_distances, classify_with_dtw, compute_dtw_distance_matrix, plot_distance_matrix
+from dtw_distances import compute_dtw_distances, classify_with_dtw, compute_dtw_distance_matrix, plot_distance_matrix, classify_with_knn_dtw
 import os
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix 
 import pdb
@@ -76,23 +76,48 @@ def compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png
     distance_matrix, file_list = compute_dtw_distance_matrix(all_files, use_all_landmarks=use_all_landmarks)
     plot_distance_matrix(distance_matrix, file_list, save_png, cmap='viridis')
 
-def perform_classification(train_files, test_files):
+def perform_1NN_classification(train_files, test_files):
     """
-    Performs classification using DTW on the provided training and testing files.
+    Performs 1NN classification using DTW on the provided training and testing files.
     Args:
         train_files (list): List of training file paths.
         test_files (list): List of testing file paths.
     """
     # DTW Classification
-    predictions, true_labels = classify_with_dtw(train_files, test_files)
+    predictions, trues = classify_with_dtw(train_files, test_files)
 
     # Filter out None predictions (if any)
-    valid_pairs = [(p, t) for p, t in zip(predictions, true_labels) if p is not None]
+    valid_pairs = [(p, t) for p, t in zip(predictions, trues) if p is not None]
     if valid_pairs:
         pred_valid, true_valid = zip(*valid_pairs)
         # Evaluation
         accuracy = accuracy_score(true_valid, pred_valid)
         print(f"Accuracy: {accuracy:.2f}")
+        print("\nClassification Report:")
+        print(classification_report(true_valid, pred_valid))
+        print("\nConfusion Matrix:")
+        print(confusion_matrix(true_valid, pred_valid))
+    else:
+        print("No valid predictions made.")
+
+def perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3):
+    """
+    Performs kNN classification using DTW metric on the provided training and testing files.
+    Args:
+        train_files (list): List of (file_path, action) for training data.
+        test_files (list): List of (file_path, action) for test data.
+        k (int): Number of neighbors to consider (default is 3).
+    """
+    # Cluster → kNN
+    predictions, trues = classify_with_knn_dtw(train_files, test_files, k=k, n_clusters=n_clusters)
+
+    # Accuracy
+    valid_pairs = [(p, t) for p, t in zip(predictions, trues) if p is not None]
+    if valid_pairs:
+        pred_valid, true_valid = zip(*valid_pairs)
+        # Evaluation
+        accuracy = accuracy_score(true_valid, pred_valid)
+        print(f"Clustered kNN-DTW Accuracy (k={k}, clusters={n_clusters}): {accuracy:.2f}")
         print("\nClassification Report:")
         print(classification_report(true_valid, pred_valid))
         print("\nConfusion Matrix:")
@@ -118,15 +143,17 @@ def main():
     train_files = load_split_files(os.path.join(splits_dir, 'train_files.txt'), global_directory)
     test_files = load_split_files(os.path.join(splits_dir, 'test_files.txt'), global_directory)
 
-    visualize_trajectories(actions, camera_directory, global_directory, action_colors, session = 2)
+    # visualize_trajectories(actions, camera_directory, global_directory, action_colors, session = 2)
 
-    visualize_velocities(actions, global_directory)
+    # visualize_velocities(actions, global_directory)
 
-    compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
+    # compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
 
-    compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
+    # compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
 
-    perform_classification(train_files, test_files)
+    # perform_1NN_classification(train_files, test_files)
+
+    perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3)
 
 if __name__ == "__main__":
     main()

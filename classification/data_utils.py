@@ -2,6 +2,7 @@
 
 import os
 import json
+import numpy as np
 
 def load_split_files(split_file, global_dir):
     """
@@ -108,3 +109,33 @@ def collect_all_files(actions, directory):
     for action in actions:
         all_files.extend(get_all_session_files(action, directory))
     return all_files
+
+def preprocess_data(X):
+    """
+    Prepare 3D data for clustering by extracting features.
+    Args:
+        X (list): List of 3D sequences.  
+    Returns:
+        np.ndarray: 2D array suitable for clustering.
+    """
+    # Extract features from each sequence
+    features = []
+    for sequence in X:
+        # Convert to numpy array if it's not already
+        seq_array = np.array(sequence)
+        
+        # Extract statistical features to represent each sequence
+        features.append([
+            np.mean(seq_array),             # Mean
+            np.std(seq_array),              # Standard deviation
+            np.max(seq_array),              # Maximum
+            np.min(seq_array),              # Minimum
+            np.median(seq_array),           # Median
+            np.percentile(seq_array, 25),   # 25th percentile
+            np.percentile(seq_array, 75),   # 75th percentile
+            np.ptp(seq_array),              # Range (peak to peak)
+            np.sum(seq_array),              # Sum
+            seq_array.shape[0]              # Length of sequence
+        ])
+    
+    return np.array(features)

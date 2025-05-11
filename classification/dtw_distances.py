@@ -1,13 +1,16 @@
 #classification/vizualization.py
 
+from data_utils import preprocess_data
+import os
 import json
 import numpy as np
 from fastdtw import fastdtw
+from sklearn.cluster import KMeans
+from sklearn.neighbors import KNeighborsClassifier
 from scipy.spatial.distance import euclidean
 import seaborn as sns
 import matplotlib.pyplot as plt
 from itertools import combinations
-import os
 import pdb
 
 def extract_nose_trajectory(file_path):
@@ -46,6 +49,42 @@ def extract_all_landmarks(file_path):
             landmarks.append(frame_landmarks)
     return landmarks
 
+def DTW(a, b):
+    """
+    Computes the Dynamic Time Warping (DTW) distance between two sequences.
+    This function calculates the DTW distance, which measures similarity between two temporal sequences that may vary in speed or length. It uses the FastDTW algorithm with Euclidean distance as the metric.
+    Args:
+        a (array-like): The first sequence (list, numpy array, etc.).
+        b (array-like): The second sequence (list, numpy array, etc.).
+    Returns:
+        float: The DTW distance between the two input sequences.
+    """
+    # Convert inputs to numpy arrays if they aren't already
+    A = np.array(a)
+    B = np.array(b)
+
+    # Handle 3D arrays by flattening the first dimension
+    if len(A.shape) == 3:
+        A = A.reshape(A.shape[0], -1)
+    if len(B.shape) == 3:
+        B = B.reshape(B.shape[0], -1)
+        
+    distance, _ = fastdtw(A, B, dist=euclidean)
+    return distance
+
+def custom_dtw_metric(x, y):
+    """
+    Custom DTW metric for scikit-learn KNeighborsClassifier.
+    
+    Args:
+        x (array): First sequence.
+        y (array): Second sequence.
+        
+    Returns:
+        float: DTW distance.
+    """
+    return DTW(x, y)
+
 def compute_dtw_distances(reference_file, other_files):
     """
     Computes DTW distances between a reference trajectory and all other trajectories.
@@ -70,7 +109,7 @@ def compute_dtw_distances(reference_file, other_files):
             continue
         
         # Compute DTW distance
-        distance, _ = fastdtw(ref_coords, coords, dist=euclidean)
+        distance = DTW(ref_coords, coords)
         
         # Extract action name from file path (e.g., 'falling' from 'dataset/globalLandmarks/falling/...')
         action_name = file_path.split(os.sep)[1]  # Assuming path like 'dataset/globalLandmarks/action/...'
@@ -107,7 +146,7 @@ def compute_dtw_distance_matrix(file_list, use_all_landmarks=True):
     
     # Calculate DTW distances
     for i, j in combinations(range(n), 2):
-        distance, _ = fastdtw(trajectories[i], trajectories[j], dist=euclidean)
+        distance = DTW(trajectories[i], trajectories[j])
         distance_matrix[i, j] = distance
         distance_matrix[j, i] = distance  # Simmetric property of DTW
     
@@ -157,14 +196,111 @@ def classify_with_dtw(train_files, test_files):
                 print(f"Warning: No landmark data in train file {train_path}")
                 continue
                 
-            distance, _ = fastdtw(test_coords, train_coords, dist=euclidean)
+            distance = DTW(test_coords, train_coords)
             distances.append((distance, train_action))
         
         if distances:
             closest_action = min(distances, key=lambda x: x[0])[1]  # Get action with smallest distance
-            print(f"Predicted action for {test_files[0]}: {closest_action}")
+            print(f"Predicted action for {os.path.basename(test_path)}: {closest_action}")
             predictions.append(closest_action)
         else:
             predictions.append(None)
     
     return predictions, true_labels
+
+def cluster_data(data, n_clusters=3):
+    """
+    Cluster the data using KMeans.
+    Args:
+        data (list): List of sequences.
+        n_clusters (int): Number of clusters.
+        
+    Returns:
+        list: Cluster labels for each sequence.
+    """
+    # Preprocess data for clustering
+    features = preprocess_data(data)
+    
+    # Apply KMeans clustering
+    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+    clusters = kmeans.fit_predict(features)
+    
+    return clusters
+
+def classify_with_knn_dtw(train_files, test_files, k=3, n_clusters=3):
+    """
+    Performs kNN classification with DTW and clustering.
+    Args:
+        train_files (list): List of (file_path, action) for training data.
+        test_files (list): List of (file_path, action) for test data.
+        k (int): Number of neighbors to consider (default is 3).
+    Returns:
+        list: Predicted actions, true actions.
+    """
+    X_train = [extract_all_landmarks(fp) for fp, _ in train_files]
+    y_train = [lbl for _, lbl in train_files]
+    if isinstance(test_files, tuple):
+        test_files = [test_files]
+    X_test  = [extract_all_landmarks(fp) for fp, _ in test_files]
+    y_test  = [lbl for _, lbl in test_files]
+    
+    # Step 1: Cluster the training data
+    cluster_labels = cluster_data(X_train, n_clusters)
+
+    # Step 2: Create separate kNN classifiers for each cluster
+    cluster_classifiers = {}
+    predictions = []
+
+    for cluster_id in range(n_clusters):
+        # Get indices of samples in this cluster
+        cluster_indices = np.where(cluster_labels == cluster_id)[0]
+
+        if len(cluster_indices) < k:
+            print(f"Warning: Cluster {cluster_id} has {len(cluster_indices)} samples, less than k={k}.")
+            continue
+            
+        # Get the training data for this cluster
+        X_cluster = [X_train[i] for i in cluster_indices]
+        y_cluster = [y_train[i] for i in cluster_indices]
+        pdb.set_trace()
+        # Create kNN classifier for this cluster
+        classifier = KNeighborsClassifier(n_neighbors=min(k, len(X_cluster)), 
+                                          algorithm='brute',
+                                          metric=custom_dtw_metric)
+        classifier.fit(X_cluster, y_cluster)
+        
+        # Store the classifier
+        cluster_classifiers[cluster_id] = (classifier, X_cluster)
+    pdb.set_trace()
+    # Step 3: Classify test samples
+    for x_test in X_test:
+        # Find the closest cluster for this test sample
+        min_distance = float('inf')
+        best_cluster = -1
+        
+        for cluster_id, (_, X_cluster) in cluster_classifiers.items():
+            # Calculate average distance to samples in this cluster
+            distances = [DTW(x_test, x_cluster) for x_cluster in X_cluster]
+            avg_distance = np.mean(distances)
+            
+            if avg_distance < min_distance:
+                min_distance = avg_distance
+                best_cluster = cluster_id
+        
+        if best_cluster == -1:
+            # If no valid cluster found, use the entire training set
+            print("Warning: No valid cluster found for test sample, using entire training set.")
+            classifier = KNeighborsClassifier(n_neighbors=min(k, len(X_train)), 
+                                             algorithm='brute',
+                                             metric=custom_dtw_metric)
+            classifier.fit(X_train, y_train)
+            pred = classifier.predict([x_test])[0]
+        else:
+            # Use the classifier for the best cluster
+            classifier, _ = cluster_classifiers[best_cluster]
+            pred = classifier.predict([x_test])[0]
+        
+        predictions.append(pred)
+    
+    return np.array(predictions), np.array(y_test)
+    return predictions, y_test
