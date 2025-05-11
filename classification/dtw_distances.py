@@ -1,13 +1,12 @@
 #classification/vizualization.py
 
-from data_utils import preprocess_data
 import os
 import json
 import numpy as np
 from fastdtw import fastdtw
-from sklearn.cluster import KMeans
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn_extra.cluster import KMedoids
 from scipy.spatial.distance import euclidean
+from collections import Counter
 import seaborn as sns
 import matplotlib.pyplot as plt
 from itertools import combinations
@@ -208,25 +207,6 @@ def classify_with_dtw(train_files, test_files):
     
     return predictions, true_labels
 
-def cluster_data(data, n_clusters=3):
-    """
-    Cluster the data using KMeans.
-    Args:
-        data (list): List of sequences.
-        n_clusters (int): Number of clusters.
-        
-    Returns:
-        list: Cluster labels for each sequence.
-    """
-    # Preprocess data for clustering
-    features = preprocess_data(data)
-    
-    # Apply KMeans clustering
-    kmeans = KMeans(n_clusters=n_clusters, random_state=42)
-    clusters = kmeans.fit_predict(features)
-    
-    return clusters
-
 def classify_with_knn_dtw(train_files, test_files, k=3, n_clusters=3):
     """
     Performs kNN classification with DTW and clustering.
@@ -244,63 +224,63 @@ def classify_with_knn_dtw(train_files, test_files, k=3, n_clusters=3):
     X_test  = [extract_all_landmarks(fp) for fp, _ in test_files]
     y_test  = [lbl for _, lbl in test_files]
     
-    # Step 1: Cluster the training data
-    cluster_labels = cluster_data(X_train, n_clusters)
-
-    # Step 2: Create separate kNN classifiers for each cluster
-    cluster_classifiers = {}
-    predictions = []
-
-    for cluster_id in range(n_clusters):
-        # Get indices of samples in this cluster
-        cluster_indices = np.where(cluster_labels == cluster_id)[0]
-
-        if len(cluster_indices) < k:
-            print(f"Warning: Cluster {cluster_id} has {len(cluster_indices)} samples, less than k={k}.")
-            continue
-            
-        # Get the training data for this cluster
-        X_cluster = [X_train[i] for i in cluster_indices]
-        y_cluster = [y_train[i] for i in cluster_indices]
-        pdb.set_trace()
-        # Create kNN classifier for this cluster
-        classifier = KNeighborsClassifier(n_neighbors=min(k, len(X_cluster)), 
-                                          algorithm='brute',
-                                          metric=custom_dtw_metric)
-        classifier.fit(X_cluster, y_cluster)
-        
-        # Store the classifier
-        cluster_classifiers[cluster_id] = (classifier, X_cluster)
-    pdb.set_trace()
-    # Step 3: Classify test samples
-    for x_test in X_test:
-        # Find the closest cluster for this test sample
-        min_distance = float('inf')
-        best_cluster = -1
-        
-        for cluster_id, (_, X_cluster) in cluster_classifiers.items():
-            # Calculate average distance to samples in this cluster
-            distances = [DTW(x_test, x_cluster) for x_cluster in X_cluster]
-            avg_distance = np.mean(distances)
-            
-            if avg_distance < min_distance:
-                min_distance = avg_distance
-                best_cluster = cluster_id
-        
-        if best_cluster == -1:
-            # If no valid cluster found, use the entire training set
-            print("Warning: No valid cluster found for test sample, using entire training set.")
-            classifier = KNeighborsClassifier(n_neighbors=min(k, len(X_train)), 
-                                             algorithm='brute',
-                                             metric=custom_dtw_metric)
-            classifier.fit(X_train, y_train)
-            pred = classifier.predict([x_test])[0]
-        else:
-            # Use the classifier for the best cluster
-            classifier, _ = cluster_classifiers[best_cluster]
-            pred = classifier.predict([x_test])[0]
-        
-        predictions.append(pred)
+    # Computing DTW distance matrix for train data
+    print(f"Preparing data for clustering...")
+    distance_matrix, _ = compute_dtw_distance_matrix([fp for fp, _ in train_files], use_all_landmarks=True)
     
-    return np.array(predictions), np.array(y_test)
+    # Clustering with k-medoids
+    print(f"Clustering {len(X_train)} samples into {n_clusters} clusters...")
+    kmedoids = KMedoids(n_clusters=n_clusters, metric='precomputed', random_state=42)
+    kmedoids.fit(distance_matrix)
+    cluster_labels = kmedoids.labels_
+    medoid_indices = kmedoids.medoid_indices_
+    for cluster_id in range(n_clusters):
+        cluster_samples = [y_train[i] for i in range(len(y_train)) if cluster_labels[i] == cluster_id]
+        print(f"Cluster {cluster_id}: {cluster_samples}")
+
+    predictions = []
+    for i, test_seq in enumerate(X_test):
+        print(f"\nClassifying test sample {i+1}/{len(X_test)}...")
+        # Calculating DTW distances to medoids
+        distances_to_medoids = []
+        for medoid_idx in medoid_indices:
+            medoid_seq = X_train[medoid_idx]
+            distance = DTW(test_seq, medoid_seq)
+            distances_to_medoids.append(distance)
+        
+        # Getting closest cluster
+        closest_cluster = np.argmin(distances_to_medoids)
+        
+        # Getting cluster indices in closest cluster
+        cluster_indices = [i for i, cl in enumerate(cluster_labels) if cl == closest_cluster]
+        
+        # Calculating DTW distances to all samples in cluster
+        distances_to_cluster = []
+        for idx in cluster_indices:
+            train_seq = X_train[idx]
+            distance = DTW(test_seq, train_seq)
+            distances_to_cluster.append((distance, y_train[idx]))
+        
+        # Sorting distances and getting k nearest
+        distances_to_cluster.sort(key=lambda x: x[0])
+        cluster_labels_set = set(label for _, label in distances_to_cluster)
+        print(f"Closest cluster {closest_cluster}: has {len(cluster_indices)} samples, labels: {cluster_labels_set}")
+        k_nearest = distances_to_cluster[:k]
+        
+        # Getting labels k nearest neighbours
+        k_labels = [label for _, label in k_nearest]
+        print(f"Nearest labels: {k_labels}")
+        
+        # Using weights
+        epsilon = 1e-5  # Avoid zero_division
+        weighted_votes = Counter()
+        for dist, label in k_nearest:
+            weight = 1 / (dist + epsilon)
+            weighted_votes[label] += weight
+
+        # Most weight prediction
+        prediction = weighted_votes.most_common(1)[0][0]
+        print(f"Predicted: {prediction}, Actual: {y_test[i]}")
+        predictions.append(prediction)
+    
     return predictions, y_test

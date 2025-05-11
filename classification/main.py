@@ -95,7 +95,7 @@ def perform_1NN_classification(train_files, test_files):
         print(f"Accuracy: {accuracy:.2f}")
         print("\nClassification Report:")
         print(classification_report(true_valid, pred_valid))
-        print("\nConfusion Matrix:")
+        print("Confusion Matrix:")
         print(confusion_matrix(true_valid, pred_valid))
     else:
         print("No valid predictions made.")
@@ -117,10 +117,10 @@ def perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3):
         pred_valid, true_valid = zip(*valid_pairs)
         # Evaluation
         accuracy = accuracy_score(true_valid, pred_valid)
-        print(f"Clustered kNN-DTW Accuracy (k={k}, clusters={n_clusters}): {accuracy:.2f}")
+        print(f"\nClustered kNN-DTW Accuracy (k={k}, clusters={n_clusters}): {accuracy:.2f}")
         print("\nClassification Report:")
         print(classification_report(true_valid, pred_valid))
-        print("\nConfusion Matrix:")
+        print("Confusion Matrix:")
         print(confusion_matrix(true_valid, pred_valid))
     else:
         print("No valid predictions made.")
@@ -129,7 +129,7 @@ def main():
     # Paths to directories with data
     camera_directory = 'dataset/cameraLandmarks' # Relative path to dataset from classification directory
     global_directory = 'dataset/globalLandmarks'
-    splits_dir = 'splits/global'
+    splits_dir = 'splits/global_tt'
     all_files_dir = 'splits/all_files'
     actions = ['timed-up-and-go', 'falling', 'sitting', 'standing'] # List of actions to visualize
     action_colors = {
@@ -143,17 +143,17 @@ def main():
     train_files = load_split_files(os.path.join(splits_dir, 'train_files.txt'), global_directory)
     test_files = load_split_files(os.path.join(splits_dir, 'test_files.txt'), global_directory)
 
-    # visualize_trajectories(actions, camera_directory, global_directory, action_colors, session = 2)
+    visualize_trajectories(actions, camera_directory, global_directory, action_colors, session = 2)
 
-    # visualize_velocities(actions, global_directory)
+    visualize_velocities(actions, global_directory)
 
-    # compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
+    compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
 
-    # compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
+    compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
 
-    # perform_1NN_classification(train_files, test_files)
-
-    perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3)
+    perform_1NN_classification(train_files, test_files)
+    
+    perform_kNN_dtw_with_clusters(train_files, test_files, k=5, n_clusters=6)
 
 if __name__ == "__main__":
     main()
