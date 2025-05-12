@@ -132,11 +132,14 @@ def main():
     splits_dir = 'splits/global_tt'
     all_files_dir = 'splits/all_files'
     actions = ['timed-up-and-go', 'falling', 'sitting', 'standing'] # List of actions to visualize
+    # actions = ['falling', 'lying', 'sitting', 'standing', 'standing-side-by-side'] # List of actions to visualize
     action_colors = {
         'falling': 'r',
         'timed-up-and-go': 'b',
         'sitting': 'g',
-        'standing': 'm'
+        'standing': 'm',
+        'lying': 'r',
+        'standing-side-by-side': 'c'
     }
     all_files = collect_all_files(actions, directory = global_directory)
     # Load split files
