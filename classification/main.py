@@ -143,20 +143,20 @@ def main():
     }
     all_files = collect_all_files(actions, directory = global_directory)
     # Load split files
-    train_files = load_split_files(os.path.join(splits_dir, 'train_files.txt'), global_directory)
+    train_files = load_split_files(os.path.join(all_files_dir, 'all_files.txt'), global_directory)
     test_files = load_split_files(os.path.join(splits_dir, 'test_files.txt'), global_directory)
 
-    visualize_trajectories(actions, camera_directory, global_directory, action_colors, session = 2)
+    # visualize_trajectories(actions, camera_directory, global_directory, action_colors, session = 2)
 
-    visualize_velocities(actions, global_directory)
+    # visualize_velocities(actions, global_directory)
 
-    compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
+    # compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
 
-    compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
+    # compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
 
-    perform_1NN_classification(train_files, test_files)
+    # perform_1NN_classification(train_files, test_files)
     
-    perform_kNN_dtw_with_clusters(train_files, test_files, k=5, n_clusters=6)
+    perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=5)
 
 if __name__ == "__main__":
     main()

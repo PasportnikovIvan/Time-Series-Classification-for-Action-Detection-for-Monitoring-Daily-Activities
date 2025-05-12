@@ -226,8 +226,9 @@ def classify_with_knn_dtw(train_files, test_files, k=3, n_clusters=3):
     
     # Computing DTW distance matrix for train data
     print(f"Preparing data for clustering...")
-    distance_matrix, _ = compute_dtw_distance_matrix([fp for fp, _ in train_files], use_all_landmarks=True)
-    
+    distance_matrix, file_list = compute_dtw_distance_matrix([fp for fp, _ in train_files], use_all_landmarks=True)
+    plot_distance_matrix(distance_matrix, file_list, save_png=True, title="DTW matrix for clustering")
+
     # Clustering with k-medoids
     print(f"Clustering {len(X_train)} samples into {n_clusters} clusters...")
     kmedoids = KMedoids(n_clusters=n_clusters, metric='precomputed', random_state=42)
