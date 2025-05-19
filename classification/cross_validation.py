@@ -38,14 +38,7 @@ def cross_validate_knn_dtw(
         # classify_with_knn_dtw expects list[(path,action)] for train & test
         preds, trues = classify_with_knn_dtw(train, test, k=k, n_clusters=n_clusters)
         acc = accuracy_score(trues, preds)
-        print(f"Fold {fold} — accuracy: {acc:.3f}")
+        print(f"Fold {fold} — accuracy: {acc:.3f}\n")
         accuracies.append(acc)
 
-    print(f"\n{n_splits}-fold CV mean accuracy: {np.mean(accuracies):.3f}  σ={np.std(accuracies):.3f}")
     return accuracies
-
-if __name__ == "__main__":
-    # example usage:
-    ACTIONS = ['timed-up-and-go', 'falling', 'sitting', 'standing']
-    GLOBAL_DIR = "dataset/globalLandmarks"
-    cross_validate_knn_dtw(GLOBAL_DIR, ACTIONS)

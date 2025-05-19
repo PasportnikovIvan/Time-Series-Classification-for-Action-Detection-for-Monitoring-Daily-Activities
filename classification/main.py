@@ -5,6 +5,7 @@ from visualization import plot_nose_trajectory, simulate_full_body_trajectory, p
 from dtw_distances import compute_dtw_distances, classify_with_dtw, compute_dtw_distance_matrix, plot_distance_matrix, classify_with_knn_dtw
 from cross_validation import cross_validate_knn_dtw
 import os
+import numpy as np
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix 
 import pdb
 
@@ -126,6 +127,19 @@ def perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3):
     else:
         print("No valid predictions made.")
 
+def perform_cross_validation_knn_dtw(global_dir, actions, n_folds=5, k=3, n_clusters=3):
+    """
+    Performs k-fold cross-validation for k-NN classification using DTW metric.
+    Args:
+        global_dir (str): Path to the globalLandmarks directory.
+        actions (list): List of actions to consider.
+        n_splits (int): Number of folds for cross-validation (default is 5).
+        k (int): Number of neighbors to consider (default is 3).
+        n_clusters (int): Number of clusters for k-NN classification (default is 3).
+    """
+    accuracies = cross_validate_knn_dtw(global_dir, actions, n_splits=n_folds, k=k, n_clusters=n_clusters)
+    print(f"\n{n_folds}-fold CV mean accuracy: {np.mean(accuracies):.3f}  σ={np.std(accuracies):.3f}")
+
 def main():
     # Paths to directories with data
     camera_directory = 'dataset/cameraLandmarks' # Relative path to dataset from classification directory
@@ -149,17 +163,17 @@ def main():
 
     visualize_trajectories(actions[3:4], camera_directory, global_directory, action_colors, session = 10)
 
-    # visualize_velocities(actions, global_directory)
+    visualize_velocities(actions, global_directory)
 
-    # compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
+    compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
 
-    # compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
+    compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
 
-    # perform_1NN_classification(train_files, test_files)
+    perform_1NN_classification(train_files, test_files)
     
-    # perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=5)
+    perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=5)
 
-    # cross_validate_knn_dtw(global_directory, actions, n_splits=5, k=3, n_clusters=5)
+    perform_cross_validation_knn_dtw(global_directory, actions, n_folds=5, k=3, n_clusters=5)
 
 if __name__ == "__main__":
     main()
