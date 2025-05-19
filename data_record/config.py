@@ -40,10 +40,10 @@ DIST_COEFFS = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222
 
 #------------------------ Saving Action ------------------------
 # Define constants for action
-ACTION_TYPE = "sppb"
+ACTION_TYPE = "timed-up-and-go"
 ACTION_SESSION = "04"
 ACTION_SUBJECT = "ivan"
-NOTES = "SPPB Prorocol repeated chair stand test. Subject was asked to stand up from a chair and sit down 5 times as fast as possible."
+NOTES = "Timed up and go test. The test person should stand up f rom a seated position without external help, walk 3 meters back and forth and sit down again (aids are permitted)."
 
 FILE_NAME_LANDMARKS = f'{ACTION_TYPE}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
 FILE_NAME_GLOBAL = f'{ACTION_TYPE}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
@@ -62,7 +62,7 @@ METADATA = {
     "camera_model": "Intel RealSense D455",
     "resolution": "640x480",
     "frame_rate": "30fps",
-    "recording_date": "2025-03-01",
+    "recording_date": "2025-05-01",
     "notes": NOTES,
     "camera_intrinsics": {
         "camera_matrix": CAMERA_MATRIX.tolist(),
@@ -74,14 +74,14 @@ METADATA = {
     },
     "matrix": {
         "rotation": [
-            [0.9475199679422059, -0.24697668000900955, 0.20299859576491916],
-            [0.029801453915425796, -0.5639730453764839, -0.8252552801608126],
-            [0.3183045455147138, 0.7879955098986935, -0.5270154577279207]
+            [0.9471427800098884, -0.2535631627589048, 0.19653568827783205],
+            [0.025638045969358356, -0.550834228120848, -0.8342208003456775],
+            [0.31978624872563405, 0.7951649989921656, -0.5152177981240323]
         ],
         "translation": [
-            -1.892179991149924,
-            0.2693138361963459,
-            2.8324064062560885
+            -1.8723990915075375,
+            0.2334436699672762, 
+            2.8590924645567
         ]
     }
 }
