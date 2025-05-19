@@ -3,6 +3,7 @@
 from data_utils import get_first_session_files, get_all_session_files, collect_all_files, load_split_files
 from visualization import plot_nose_trajectory, simulate_full_body_trajectory, plot_nose_velocity
 from dtw_distances import compute_dtw_distances, classify_with_dtw, compute_dtw_distance_matrix, plot_distance_matrix, classify_with_knn_dtw
+from cross_validation import cross_validate_knn_dtw
 import os
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix 
 import pdb
@@ -143,10 +144,10 @@ def main():
     }
     all_files = collect_all_files(actions, directory = global_directory)
     # Load split files
-    train_files = load_split_files(os.path.join(all_files_dir, 'all_files.txt'), global_directory)
+    train_files = load_split_files(os.path.join(splits_dir, 'train_files.txt'), global_directory)
     test_files = load_split_files(os.path.join(splits_dir, 'test_files.txt'), global_directory)
 
-    # visualize_trajectories(actions, camera_directory, global_directory, action_colors, session = 2)
+    visualize_trajectories(actions[3:4], camera_directory, global_directory, action_colors, session = 10)
 
     # visualize_velocities(actions, global_directory)
 
@@ -156,7 +157,9 @@ def main():
 
     # perform_1NN_classification(train_files, test_files)
     
-    perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=5)
+    # perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=5)
+
+    # cross_validate_knn_dtw(global_directory, actions, n_splits=5, k=3, n_clusters=5)
 
 if __name__ == "__main__":
     main()
