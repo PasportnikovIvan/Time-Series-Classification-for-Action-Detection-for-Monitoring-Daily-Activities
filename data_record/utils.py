@@ -21,8 +21,10 @@ def build_metadata(camera_matrix, distortion_coeffs, depth_scale):
         "location": ACTION_LOCATION,
         "lighting_conditions": ACTION_LIGHTING_CONDITIONS,
         "camera_model": CAMERA_MODEL,
-        "resolution": CAMERA_RESOLUTION,
-        "frame_rate": CAMERA_FRAME_RATE,
+        "resolution": f"{IMAGE_WIDTH}x{IMAGE_HEIGHT}",
+        "frame_rate": f"{FRAME_RATE}fps",
+        "audio_rate": f"{AUDIO_RATE}Hz",
+        "audio_channels": f"{AUDIO_CHANNELS} channels",
         "recording_date": RECORDING_DATE,
         "notes": NOTES,
         "camera_intrinsics": {
@@ -42,41 +44,38 @@ def rodrigues_to_matrix(rvec):
     return rot.as_matrix()
 
 #=============== DEPTH CALCULATION ===============
-def calculate_median_depth(x, y, depth_frame, depth_scale, radius=5, min_valid_pixels=3):
+def calculate_median_depth(x, y, depth_frame, depth_scale):
     """
     Calculate median depth for 25% of closest points around a given point.
-    
     Args:
-    depth_frame (np.ndarray): Depth frame
-    x (int): X-coordinate of the center point
-    y (int): Y-coordinate of the center point
-    radius (int): Radius of the window around the center point
-    min_valid_pixels (int): Minimum number of valid pixels to calculate median
-    
+        x (int): X-coordinate of the center point
+        y (int): Y-coordinate of the center point
+        depth_frame (np.ndarray): Depth frame
+        depth_scale (float): Depth scale factor
     Returns:
-    float: Median depth value
+        float: Median depth of the closest points
     """
     # Get the window boundaries
-    y_min = max(0, y - radius)
-    y_max = min(IMAGE_HEIGHT, y + radius + 1)
-    x_min = max(0, x - radius)
-    x_max = min(IMAGE_WIDTH, x + radius + 1)
+    y_min = max(0, y - RADIUS_WINDOW)
+    y_max = min(IMAGE_HEIGHT, y + RADIUS_WINDOW + 1)
+    x_min = max(0, x - RADIUS_WINDOW)
+    x_max = min(IMAGE_WIDTH, x + RADIUS_WINDOW + 1)
 
     # Extract a window around the point
     window = depth_frame[y_min:y_max, x_min:x_max]
-    
+
     # Flatten the window and remove zero values
     depths = window[window > 0]
     
     # Return the median of the closest points
-    if len(depths) > min_valid_pixels:
+    if len(depths) > 0:
         # Sort the depths and take the first 25%
         sorted_depths = np.sort(depths)
-        return np.median(sorted_depths[:max(1, len(sorted_depths) // 4)]) * depth_scale
+        k = max(1, int(len(sorted_depths) * MEDIAN_PERCENT))
+        return np.median(sorted_depths[:k]) * depth_scale
     else: # If not enough valid pixels, return 0
-        print(f"Not enough valid pixels for depth calculation at ({x}, {y}). Found: {len(depths)}")
-        # return depth_frame[x, y] * depth_scale
-        return 0.0 # Return 0 if no valid depths are found
+        print(f"Not enough valid pixels for depth calculation at ({x}, {y}). Found: {depth_frame[x, y] * depth_scale}")
+        return depth_frame[x, y] * depth_scale
 
 #=============== PIXELS -> CAMERA COORDS ===============
 def pixels_to_camera_coordinates(x, y, depth, camera_matrix):

@@ -5,12 +5,17 @@ import cv2
 import mediapipe as mp
 import pyrealsense2 as rs
 import numpy as np
+import sounddevice as sd
+import queue
 from config import *
 
-#=============== CAMERA SETUP AND MEDIAPIPE ===============
+#=============== CAMERA, AUDIO, AND MEDIAPIPE SETUP ===============
 def setup_camera_and_pose():
     """
-    Setup for RealSense camera and MediaPipe.
+    Setup RealSense camera, MediaPipe Pose, and audio input stream.
+    Returns:
+        pipeline, pose, depth_scale,
+        camera_matrix, distortion_coeffs, audio_queue
     """
     # RealSense cam setup
     pipeline = rs.pipeline()
@@ -23,15 +28,15 @@ def setup_camera_and_pose():
     depth_sensor = profile.get_device().first_depth_sensor()
     depth_scale = depth_sensor.get_depth_scale()
 
-    # get color intrinsics
+    # Camera intrinsics
     color_profile = profile.get_stream(rs.stream.color).as_video_stream_profile()
     intr = color_profile.get_intrinsics()
     camera_matrix = np.array([
         [intr.fx,    0,    intr.ppx],
         [   0,    intr.fy, intr.ppy],
         [   0,       0,        1   ]
-    ])
-    distortion_coeffs = np.array(intr.coeffs)  # 5-element list
+    ], dtype=float)
+    distortion_coeffs = np.array(intr.coeffs, dtype=float)  # 5-element list
 
     # Setup MediaPipe Pose
     pose = mp.solutions.pose.Pose(
@@ -40,14 +45,30 @@ def setup_camera_and_pose():
         min_tracking_confidence=0.5, 
         model_complexity=1
     )
-    return pipeline, pose, depth_scale, camera_matrix, distortion_coeffs
+
+    # Audio capture setup
+    audio_queue = queue.Queue(maxsize=10)
+
+    def _audio_callback(indata, frames, time_info, status):
+        # Put audio buffer into queue
+        audio_queue.put(indata.copy())
+
+    sd.default.samplerate = AUDIO_RATE
+    sd.default.channels = AUDIO_CHANNELS
+    audio_stream = sd.InputStream(callback=_audio_callback)
+    audio_stream.start()
+
+    return pipeline, pose, depth_scale, camera_matrix, distortion_coeffs, audio_queue
 
 #=============== FRAME COLLECTION AND PROCESSING ===============
-def collect_frame(pipeline, pose, start_time, camera_matrix, distortion_coeffs):
+def collect_frame(pipeline, pose, start_time, camera_matrix, distortion_coeffs, audio_queue):
     """
-    Collect a frame from the camera and process it with MediaPipe Pose.
+    Collect a frame from the camera, MediaPipe Pose, ArUco, and get audio amplitude.
+    Returns tuple:
+       (timestamp, color_image, depth_image,
+        mp_results, markers_poses, audio_amp)
     """
-    # Capture frames from RealSense
+    # -- Capture frames from RealSense --
     frames = pipeline.wait_for_frames()
     time_of_frame = frames.get_timestamp() / 1000.0 - start_time
     color_frame = frames.get_color_frame()
@@ -55,16 +76,28 @@ def collect_frame(pipeline, pose, start_time, camera_matrix, distortion_coeffs):
     if not color_frame or not depth_frame:
         return None
     
-    # Convert images to OpenCV format
+    # -- Convert to OpenCV arrays --
     color_image = np.asanyarray(color_frame.get_data())
     depth_image = np.asanyarray(depth_frame.get_data())
     rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
 
-    # ArUco markers detection
+    # -- Detect ArUco markers --
     markers_poses = detect_aruco_markers(color_image, camera_matrix, distortion_coeffs)
 
+    # -- MediaPipe Pose --
     mp_results = pose.process(rgb_image)
-    return (time_of_frame, color_image, depth_image, mp_results, markers_poses)
+
+    # -- Audio amplitude (RMS) --
+    try:
+        audio_buffer = audio_queue.get()
+        # Mix down to mono if stereo
+        mono = audio_buffer.mean(axis=1) if audio_buffer.ndim > 1 else audio_buffer
+        audio_amp = float(np.sqrt(np.mean(mono**2)))
+    except queue.Empty:
+        audio_amp = 0.0
+        print("[WARN] Audio queue is empty")
+
+    return (time_of_frame, color_image, depth_image, mp_results, markers_poses, audio_amp)
 
 #=============== ARUCO MARKER DETECTION ===============
 def detect_aruco_markers(image, camera_matrix, distortion_coeffs):
@@ -87,6 +120,7 @@ def detect_aruco_markers(image, camera_matrix, distortion_coeffs):
     poses = {}
     for corner, mid in zip(corners, ids.flatten()):
         if mid in (GLOBAL_MARKER_ID, OBJECT_MARKER_ID):
+            # corner shape (4,1,2) -> reshape to (4,2); solvePnP needs 2D points
             image_points = corner.reshape(-1, 2)
             _, rvec, tvec = cv2.solvePnP(MARKER_POINTS, image_points, camera_matrix, distortion_coeffs)
             poses[int(mid)] = (rvec, tvec)

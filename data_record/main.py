@@ -13,10 +13,10 @@ def main():
     """
     Main func for rendering frames and save data.
     """
-    # Setup camera and pose detection
-    pipeline, pose, depth_scale, camera_matrix, distortion_coeffs = setup_camera_and_pose()
-    
-    # Build metadata
+    # Setup camera; pose and audio detection
+    pipeline, pose, depth_scale, camera_matrix, distortion_coeffs, audio_queue = setup_camera_and_pose()
+
+    # Build metadata once
     metadata = build_metadata(camera_matrix.tolist(), distortion_coeffs.tolist(), depth_scale)
     
     # Initialize variables
@@ -30,12 +30,18 @@ def main():
         # Process video frames
         while frame_count < ACTION_LENGTH:
             # Capture and process one frame
-            result = collect_frame(pipeline, pose, start_time, camera_matrix, distortion_coeffs)
+            result = collect_frame(
+                pipeline, pose, start_time,
+                camera_matrix, distortion_coeffs, audio_queue
+            )
             if result is None:
+                print("[WARN] collect_frame returned None")
                 continue
 
-            time_of_frame, color_image, depth_image, mp_results, markers_poses = result
+            (time_of_frame, color_image, depth_image,
+             mp_results, markers_poses, audio_amp) = result
             if mp_results is None or markers_poses is None:
+                print("[WARN] No pose or markers detected")
                 continue
 
             # global-marker pose
@@ -44,14 +50,23 @@ def main():
             rvec_obj, tvec_obj = markers_poses.get(OBJECT_MARKER_ID, (None, None))
             
             # Calculate 3D coordinates with depth
-            landmarks_cam = process_landmarks(mp_results, color_image, depth_image, depth_scale, camera_matrix)
+            landmarks_cam = process_landmarks(
+                mp_results, color_image, depth_image,
+                depth_scale, camera_matrix
+            )
             if PRINT_LANDMARKS_TO_CONSOLE and landmarks_cam:
                 print(f"Extracted Landmarks: {landmarks_cam}")
 
             # Throttle to PARAMETER_TIMESTEP
             if (time_of_frame - last_save_time) >= PARAMETER_TIMESTEP:
                 # Saving frame data
-                raw_buffer.append((time_of_frame, landmarks_cam, rvec_gl, tvec_gl, rvec_obj, tvec_obj))
+                raw_buffer.append((
+                    time_of_frame,
+                    landmarks_cam,
+                    rvec_gl, tvec_gl,
+                    rvec_obj, tvec_obj,
+                    audio_amp
+                ))
                 frame_count += 1
                 last_save_time = time_of_frame
                 print(f"Collected frame {frame_count}/{ACTION_LENGTH} at time {time_of_frame:.2f}s")
@@ -63,6 +78,12 @@ def main():
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 hard_stop = True
                 break
+
+    except Exception as e:
+        import traceback
+        print("[ERROR] Exception in frame loop:", e)
+        traceback.print_exc()
+        return
 
     finally:
         pipeline.stop()
@@ -77,7 +98,12 @@ def main():
         "global_landmarks": []
     }
 
-    for i, (time_of_frame, landmarks_cam, rvec_gl, tvec_gl, rvec_obj, tvec_obj) in enumerate(raw_buffer):
+    for i, (
+        time_of_frame, landmarks_cam, 
+        rvec_gl, tvec_gl, 
+        rvec_obj, tvec_obj,
+        sound_amp
+    ) in enumerate(raw_buffer):
         # compute rotation matrix if we have a valid rvec_gl
         if rvec_gl is not None:
             list_rvec = rvec_gl.flatten().tolist()
@@ -104,14 +130,16 @@ def main():
             "rotation_matrix": rmat_list,
             "translation_vec": list_tvec,
             "landmarks":       landmarks_cam,
-            "obj_coords":      obj_coords
+            "obj_coords":      obj_coords,
+            "sound_amp":       sound_amp
         })
         data_entries["global_landmarks"].append({
             "timestamp":       time_of_frame,
             "rotation_matrix": rmat_list,
             "translation_vec": list_tvec,
             "landmarks":       global_landmarks,
-            "obj_coords":      obj_coords
+            "obj_coords":      obj_coords,
+            "sound_amp":       sound_amp
         })
         print(f"Processed frame {i + 1}/{ACTION_LENGTH} with timestamp {time_of_frame:.2f}s")
 

@@ -4,13 +4,6 @@
 import cv2.aruco as aruco
 import numpy as np
 
-#------------------------ Window ------------------------
-IMAGE_WIDTH = 640
-IMAGE_HEIGHT = 480
-FRAME_RATE = 30
-VISUAL_LANDMARKS = True
-PRINT_LANDMARKS_TO_CONSOLE = False
-
 #------------------------ METADATA ------------------------
 # Define constants for action
 ACTION_NAME = "standing"
@@ -22,10 +15,32 @@ SUBJECT_HEALTH_STATUS = "healthy"
 ACTION_LOCATION = "bubenec_dorm"
 ACTION_LIGHTING_CONDITIONS = "bright"
 CAMERA_MODEL = "Intel RealSense D455"
-CAMERA_RESOLUTION = f"{IMAGE_WIDTH}x{IMAGE_HEIGHT}"
-CAMERA_FRAME_RATE = f"{FRAME_RATE}fps"
 RECORDING_DATE = "2025-05-01"
 NOTES = "Standing"
+
+#------------------------ Saving Action ------------------------
+ACTION_LENGTH = 100 # actions
+PARAMETER_TIMESTEP = 1.0 / 10.0  # seconds between saved samples (0.1 s)
+
+CAMERA_DIRECTORY = '../dataset/cameraLandmarks' # Relative path to dataset from classification directory
+GLOBAL_DIRECTORY = '../dataset/globalLandmarks'
+FILE_NAME_LANDMARKS = f'{CAMERA_DIRECTORY}/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
+FILE_NAME_GLOBAL = f'{GLOBAL_DIRECTORY}/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
+
+#------------------------ Window ------------------------
+IMAGE_WIDTH = 640
+IMAGE_HEIGHT = 480
+FRAME_RATE = 30
+VISUAL_LANDMARKS = True
+PRINT_LANDMARKS_TO_CONSOLE = False
+
+#------------------------ AUDIO ------------------------
+AUDIO_RATE = 44100
+AUDIO_CHANNELS = 1
+
+#------------------------ DEPTH FILTERING ------------------------
+RADIUS_WINDOW = 5     # window size for depth patch
+MEDIAN_PERCENT = 0.25 # fraction of closest depths
 
 #------------------------ Aruco ------------------------
 ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
@@ -42,15 +57,6 @@ MARKER_POINTS = np.array(
     ],
     dtype=np.float32,
 )
-
-#------------------------ Saving Action ------------------------
-ACTION_LENGTH = 100 # actions
-PARAMETER_TIMESTEP = 1.0 / 10.0  # seconds between saved samples (0.1 s)
-
-CAMERA_DIRECTORY = '../dataset/cameraLandmarks' # Relative path to dataset from classification directory
-GLOBAL_DIRECTORY = '../dataset/globalLandmarks'
-FILE_NAME_LANDMARKS = f'{CAMERA_DIRECTORY}/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
-FILE_NAME_GLOBAL = f'{GLOBAL_DIRECTORY}/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
 
 #------------------------ Landmarks ------------------------
 LANDMARKS_COLLECTION = {
