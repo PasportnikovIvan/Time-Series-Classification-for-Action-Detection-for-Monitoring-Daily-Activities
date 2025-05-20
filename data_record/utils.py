@@ -3,10 +3,46 @@
 
 import cv2
 import numpy as np
-from config import IMAGE_WIDTH, IMAGE_HEIGHT, CAMERA_MATRIX, PRINT_LANDMARKS_TO_CONSOLE
+from scipy.spatial.transform import Rotation as R
+from config import *
+
+#=============== METADATA ===============
+def build_metadata(camera_matrix, distortion_coeffs, depth_scale):
+    """
+    Build metadata for the action.
+    """
+    metadata = {
+        "action": ACTION_NAME,
+        "session": ACTION_SESSION,
+        "subject": ACTION_SUBJECT,
+        "subject_age": SUBJECT_AGE,
+        "subject_gender": SUBJECT_GENDER,
+        "subject_health_status": SUBJECT_HEALTH_STATUS,
+        "location": ACTION_LOCATION,
+        "lighting_conditions": ACTION_LIGHTING_CONDITIONS,
+        "camera_model": CAMERA_MODEL,
+        "resolution": CAMERA_RESOLUTION,
+        "frame_rate": CAMERA_FRAME_RATE,
+        "recording_date": RECORDING_DATE,
+        "notes": NOTES,
+        "camera_intrinsics": {
+            "camera_matrix": camera_matrix,
+            "distortion": distortion_coeffs,
+            "depth_scale": depth_scale
+        },
+    }
+    return metadata
+
+#=============== ROTATION MATRIX ===============
+def rodrigues_to_matrix(rvec):
+    """
+    Convert a Rodrigues rotation vector to a 3x3 rotation matrix.
+    """
+    rot = R.from_rotvec(np.array(rvec))
+    return rot.as_matrix()
 
 #=============== DEPTH CALCULATION ===============
-def calculate_median_depth(x, y, depth_frame, radius=6, min_valid_pixels=3):
+def calculate_median_depth(x, y, depth_frame, depth_scale, radius=5, min_valid_pixels=3):
     """
     Calculate median depth for 25% of closest points around a given point.
     
@@ -36,13 +72,14 @@ def calculate_median_depth(x, y, depth_frame, radius=6, min_valid_pixels=3):
     if len(depths) > min_valid_pixels:
         # Sort the depths and take the first 25%
         sorted_depths = np.sort(depths)
-        return np.median(sorted_depths[:max(1, len(sorted_depths) // 4)])
+        return np.median(sorted_depths[:max(1, len(sorted_depths) // 4)]) * depth_scale
     else: # If not enough valid pixels, return 0
         print(f"Not enough valid pixels for depth calculation at ({x}, {y}). Found: {len(depths)}")
-        return 0  # Return 0 if no valid depths are found
+        # return depth_frame[x, y] * depth_scale
+        return 0.0 # Return 0 if no valid depths are found
 
 #=============== PIXELS -> CAMERA COORDS ===============
-def pixels_to_camera_coordinates(x, y, depth, camera_matrix=CAMERA_MATRIX):
+def pixels_to_camera_coordinates(x, y, depth, camera_matrix):
     """
     Terning pixel coords into camera axes.
     

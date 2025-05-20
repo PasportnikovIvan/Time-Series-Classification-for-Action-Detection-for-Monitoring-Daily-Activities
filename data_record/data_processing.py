@@ -7,7 +7,7 @@ from config import *
 from utils import pixels_to_camera_coordinates, calculate_median_depth
 
 #=============== PROCESSING LANDMARKS FROM POSE ===============
-def process_landmarks(results, color_image, depth_image, depth_scale, camera_matrix=CAMERA_MATRIX):
+def process_landmarks(results, color_image, depth_image, depth_scale, camera_matrix):
     """
     Processing the img to get landmarks and its coordinates.
     """
@@ -20,7 +20,7 @@ def process_landmarks(results, color_image, depth_image, depth_scale, camera_mat
         x, y = int(landmark.x * IMAGE_WIDTH), int(landmark.y * IMAGE_HEIGHT) # pixels
         # check if coords are in img borders
         if 0 <= x < IMAGE_WIDTH and 0 <= y < IMAGE_HEIGHT:
-            median_depth = calculate_median_depth(x, y, depth_image) * depth_scale # depth data in meters
+            median_depth = calculate_median_depth(x, y, depth_image, depth_scale) # depth data in meters
             pixel_coords[idx] = (x, y, median_depth)
             cam_coords = pixels_to_camera_coordinates(x, y, median_depth, camera_matrix)
             landmarks[LANDMARKS_COLLECTION[idx]] = cam_coords

@@ -11,9 +11,27 @@ FRAME_RATE = 30
 VISUAL_LANDMARKS = True
 PRINT_LANDMARKS_TO_CONSOLE = False
 
+#------------------------ METADATA ------------------------
+# Define constants for action
+ACTION_NAME = "standing"
+ACTION_SESSION = "11"
+ACTION_SUBJECT = "ivan"
+SUBJECT_AGE = "21"
+SUBJECT_GENDER = "male"
+SUBJECT_HEALTH_STATUS = "healthy"
+ACTION_LOCATION = "bubenec_dorm"
+ACTION_LIGHTING_CONDITIONS = "bright"
+CAMERA_MODEL = "Intel RealSense D455"
+CAMERA_RESOLUTION = f"{IMAGE_WIDTH}x{IMAGE_HEIGHT}"
+CAMERA_FRAME_RATE = f"{FRAME_RATE}fps"
+RECORDING_DATE = "2025-05-01"
+NOTES = "Standing"
+
 #------------------------ Aruco ------------------------
 ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
 ARUCO_PARAMS = aruco.DetectorParameters()
+GLOBAL_MARKER_ID = 300 # defines your world coordinate frame
+OBJECT_MARKER_ID = 100 # attached to the object (e.g., bed or chair)
 MARKER_SIZE = 0.154  # Marker size in METERS
 MARKER_POINTS = np.array(
     [
@@ -24,68 +42,15 @@ MARKER_POINTS = np.array(
     ],
     dtype=np.float32,
 )
-# 1280x720
-CAMERA_MATRIX = np.array([
-    [642.33569336, 0.0,          641.48535156], 
-    [0.0,          641.68328857, 370.55108643], 
-    [0.0,          0.0,          1.0]
-])
-# # 640x480
-# CAMERA_MATRIX = np.array([
-#     [385.40142822, 0.0,          320.89123535], 
-#     [0.0,          385.00997925, 246.3306427], 
-#     [0.0,          0.0,          1.0]
-# ])
-DIST_COEFFS = np.array([-0.05550327, 0.06885497, 0.00032144, 0.00124271, -0.0222161])
 
 #------------------------ Saving Action ------------------------
-# Define constants for action
-ACTION_TYPE = "timed-up-and-go"
-ACTION_SESSION = "04"
-ACTION_SUBJECT = "ivan"
-NOTES = "Timed up and go test. The test person should stand up f rom a seated position without external help, walk 3 meters back and forth and sit down again (aids are permitted)."
-
 ACTION_LENGTH = 100 # actions
 PARAMETER_TIMESTEP = 1.0 / 10.0  # seconds between saved samples (0.1 s)
 
-FILE_NAME_LANDMARKS = f'{ACTION_TYPE}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
-FILE_NAME_GLOBAL = f'{ACTION_TYPE}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
-#HEADER: action, subject, (tMatrix, rMatrix optionally for camera coordinates), location, session... etc = METADATA
-METADATA = {
-    "action": ACTION_TYPE,
-    "session": ACTION_SESSION,
-    "subject": ACTION_SUBJECT,
-    "subject_age": "21",
-    "subject_gender": "male",
-    "subject_health_status": "healthy",
-    "location": "bubenec_dorm",
-    "lighting_conditions": "bright",
-    "camera_model": "Intel RealSense D455",
-    "resolution": "640x480",
-    "frame_rate": "30fps",
-    "recording_date": "2025-05-01",
-    "notes": NOTES,
-    "camera_intrinsics": {
-        "camera_matrix": CAMERA_MATRIX.tolist(),
-        "fx": CAMERA_MATRIX[0, 0],
-        "fy": CAMERA_MATRIX[1, 1],
-        "cx": CAMERA_MATRIX[0, 2],
-        "cy": CAMERA_MATRIX[1, 2],
-        "distortion": DIST_COEFFS.tolist()
-    },
-    "matrix": {
-        "rotation": [
-            [0.9471427800098884, -0.2535631627589048, 0.19653568827783205],
-            [0.025638045969358356, -0.550834228120848, -0.8342208003456775],
-            [0.31978624872563405, 0.7951649989921656, -0.5152177981240323]
-        ],
-        "translation": [
-            -1.8723990915075375,
-            0.2334436699672762, 
-            2.8590924645567
-        ]
-    }
-}
+CAMERA_DIRECTORY = '../dataset/cameraLandmarks' # Relative path to dataset from classification directory
+GLOBAL_DIRECTORY = '../dataset/globalLandmarks'
+FILE_NAME_LANDMARKS = f'{CAMERA_DIRECTORY}/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
+FILE_NAME_GLOBAL = f'{GLOBAL_DIRECTORY}/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
 
 #------------------------ Landmarks ------------------------
 LANDMARKS_COLLECTION = {

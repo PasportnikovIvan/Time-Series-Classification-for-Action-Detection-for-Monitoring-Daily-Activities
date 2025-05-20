@@ -5,8 +5,8 @@ from time import time
 import cv2
 from data_collection import setup_camera_and_pose, collect_frame
 from data_processing import process_landmarks
+from utils import build_metadata, rodrigues_to_matrix, convert_landmarks_to_global
 from data_storage import save_data
-from utils import convert_landmarks_to_global
 
 
 def main():
@@ -14,10 +14,13 @@ def main():
     Main func for rendering frames and save data.
     """
     # Setup camera and pose detection
-    pipeline, pose, depth_scale = setup_camera_and_pose()
-
+    pipeline, pose, depth_scale, camera_matrix, distortion_coeffs = setup_camera_and_pose()
+    
+    # Build metadata
+    metadata = build_metadata(camera_matrix.tolist(), distortion_coeffs.tolist(), depth_scale)
+    
     # Initialize variables
-    raw_landmarks = []
+    raw_buffer = []
     start_time = time()
     last_save_time = 0
     frame_count = 0
@@ -26,25 +29,28 @@ def main():
     try:
         # Process video frames
         while frame_count < ACTION_LENGTH:
-            time_of_frame, color_image, depth_image, results, (rvec, tvec) = collect_frame(pipeline, pose, start_time)
-            if color_image is None and depth_image is None and rvec is None and tvec is None:
+            # Capture and process one frame
+            result = collect_frame(pipeline, pose, start_time, camera_matrix, distortion_coeffs)
+            if result is None:
                 continue
+
+            time_of_frame, color_image, depth_image, results, (rvec, tvec) = result
             
             # Calculate 3D coordinates with depth
-            landmarks = process_landmarks(results, color_image, depth_image, depth_scale)
+            landmarks = process_landmarks(results, color_image, depth_image, depth_scale, camera_matrix)
             if PRINT_LANDMARKS_TO_CONSOLE and landmarks:
                 print(f"Extracted Landmarks: {landmarks}")
 
-            current_time = time_of_frame
-            if (current_time - last_save_time) >= PARAMETER_TIMESTEP:
+            # Throttle to PARAMETER_TIMESTEP
+            if (time_of_frame - last_save_time) >= PARAMETER_TIMESTEP:
                 # Saving frame data
-                raw_landmarks.append((time_of_frame, landmarks, rvec, tvec))
+                raw_buffer.append((time_of_frame, landmarks, rvec, tvec))
                 frame_count += 1
-                last_save_time = current_time
-                print(f"Collected frame {frame_count}/{ACTION_LENGTH} at time {current_time:.2f}s")
+                last_save_time = time_of_frame
+                print(f"Collected frame {frame_count}/{ACTION_LENGTH} at time {time_of_frame:.2f}s")
 
             # Display the image
-            cv2.imshow('Real World Landmark Coordinates', color_image)
+            cv2.imshow('Landmarks', color_image)
 
             # Break the loop on 'q' key press
             if cv2.waitKey(1) & 0xFF == ord('q'):
@@ -59,33 +65,54 @@ def main():
         print("Hard stop detected. Data will not be saved.")
         return
 
-    frame_data = {
+    data_entries = {
         "camera_landmarks": [],
         "global_landmarks": []
     }
 
-    for i, (time_of_frame, landmarks, rvec, tvec) in enumerate(raw_landmarks):
-        rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
-        results = pose.process(rgb_image)
+    for i, (time_of_frame, landmarks, rvec, tvec) in enumerate(raw_buffer):
+        # compute rotation matrix if we have a valid rvec
+        if rvec is not None:
+            list_rvec = rvec.flatten().tolist()
+            rmat = rodrigues_to_matrix(list_rvec)
+            rmat_list = rmat.tolist()
+        else:
+            rmat_list = None
+        list_tvec = tvec.flatten().tolist() if tvec is not None else None
+    
+        # Compute global landmarks
         global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
         if PRINT_LANDMARKS_TO_CONSOLE and global_landmarks:
             print(f"Global Landmarks: {global_landmarks}")
 
         # saving frame data
-        frame_data["camera_landmarks"].append({
+        data_entries["camera_landmarks"].append({
             "timestamp": time_of_frame,
+            "rotation_matrix": rmat_list,
+            "translation_vec": list_tvec,
             "landmarks": landmarks
         })
-        frame_data["global_landmarks"].append({
+        data_entries["global_landmarks"].append({
             "timestamp": time_of_frame,
+            "rotation_matrix": rmat_list,
+            "translation_vec": list_tvec,
             "landmarks": global_landmarks
         })
         print(f"Processed frame {i + 1}/{ACTION_LENGTH} with timestamp {time_of_frame:.2f}s")
 
-    # Save the data to JSON files
-    save_data({"header": METADATA, "data": frame_data["camera_landmarks"]}, FILE_NAME_LANDMARKS)
-    save_data({"header": METADATA, "data": frame_data["global_landmarks"]}, FILE_NAME_GLOBAL)
-    print(f"Saved {ACTION_LENGTH} actions")
+    # --- Assemble final JSON and save ---
+    final_output_camera = {
+        "metadata": metadata,
+        "data": data_entries["camera_landmarks"]
+    }
+    final_output_global = {
+        "metadata": metadata,
+        "data": data_entries["global_landmarks"]
+    }
+    save_data(final_output_camera, FILE_NAME_LANDMARKS)
+    print(f'Saved {len(data_entries["camera_landmarks"])} frames to {FILE_NAME_LANDMARKS}')
+    save_data(final_output_global, FILE_NAME_GLOBAL)
+    print(f'Saved {len(data_entries["global_landmarks"])} frames to {FILE_NAME_GLOBAL}')
 
 if __name__ == "__main__":
     main()
