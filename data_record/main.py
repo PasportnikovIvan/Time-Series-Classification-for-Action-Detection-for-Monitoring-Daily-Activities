@@ -8,6 +8,8 @@ from data_collection import setup_camera_and_pose, collect_frame
 from data_processing import process_landmarks
 from utils import build_metadata, rodrigues_to_matrix, convert_point_to_global, convert_landmarks_to_global
 from data_storage import save_data
+from detection_and_repair import detect_misdetections, repair_misdetections
+from trim_landmarks import trim_json_data
 
 
 def main():
@@ -139,8 +141,26 @@ def main():
         "metadata": metadata,
         "data": data_entries
     }
-    save_data(final_output, FILE_NAME_GLOBAL)
-    print(f'Saved {len(data_entries)} frames to {FILE_NAME_GLOBAL}')
+    save_data(final_output, FILE_NAME_RAW)
+    print(f'Saved {len(data_entries)} raw frames to {FILE_NAME_RAW}')
+
+    # --- Detect misdetections and repair ---
+    misdetection_indices = detect_misdetections(final_output["data"])
+    if misdetection_indices:
+        repaired_data = repair_misdetections(final_output["data"], misdetection_indices)
+        final_output["data"] = repaired_data
+        print(f"Repaired {len(misdetection_indices)} misdetections in-memory")
+    else:
+        print("No misdetections found.")
+
+    # --- Trimming for length constraint (80 frames) ---
+    trimmed = trim_json_data(final_output["data"], START_INDEX, END_INDEX)
+    final_output["data"] = trimmed
+    print(f"Trimmed frames to indices {START_INDEX}-{END_INDEX}, total now {len(final_output['data'])}")
+
+    # --- Save JSON to processed folder ---
+    save_data(final_output, FILE_NAME_PROCESSED)
+    print(f'Saved {len(final_output["data"])} raw frames to {FILE_NAME_PROCESSED}')
 
 if __name__ == "__main__":
     main()

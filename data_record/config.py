@@ -7,7 +7,7 @@ import numpy as np
 #------------------------ METADATA ------------------------
 # Define constants for action
 ACTION_NAME = "standing"
-ACTION_SESSION = "11"
+ACTION_SESSION = "01"
 ACTION_SUBJECT = "ivan"
 SUBJECT_AGE = "21"
 SUBJECT_GENDER = "male"
@@ -16,14 +16,15 @@ ACTION_LOCATION = "bubenec_dorm"
 ACTION_LIGHTING_CONDITIONS = "bright"
 CAMERA_MODEL = "Intel RealSense D455"
 RECORDING_DATE = "2025-05-01"
-NOTES = "Standing"
+NOTES = "Subject is standing still, no movement"
 
 #------------------------ Saving Action ------------------------
 ACTION_LENGTH = 100 # actions
 PARAMETER_TIMESTEP = 1.0 / 10.0  # seconds between saved samples (0.1 s)
 
 GLOBAL_DIRECTORY = '../dataset' # Relative path to dataset from classification directory
-FILE_NAME_GLOBAL = f'{GLOBAL_DIRECTORY}/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
+FILE_NAME_RAW = f'{GLOBAL_DIRECTORY}/raws/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
+FILE_NAME_PROCESSED = f'{GLOBAL_DIRECTORY}/processed/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
 
 #------------------------ Window ------------------------
 IMAGE_WIDTH = 640
@@ -36,7 +37,7 @@ PRINT_LANDMARKS_TO_CONSOLE = False
 AUDIO_RATE = 44100
 AUDIO_CHANNELS = 1
 
-#------------------------ DEPTH FILTERING ------------------------
+#------------------------ Depth Filtering ------------------------
 RADIUS_WINDOW = 5     # window size for depth patch
 MEDIAN_PERCENT = 0.25 # fraction of closest depths
 
@@ -94,4 +95,8 @@ LANDMARKS_COLLECTION = {
 }
 
 #------------------------ Threshold for Misdetection ------------------------
-POSITION_THRESHOLD = 2.5  # Max allowed movement in meters between frames
+DISTANCE_THRESHOLD = 0.5  # Max allowed movement in meters between frames
+
+#------------------------ Data Trim Parameters ------------------------
+START_INDEX = 10
+END_INDEX   = 89
