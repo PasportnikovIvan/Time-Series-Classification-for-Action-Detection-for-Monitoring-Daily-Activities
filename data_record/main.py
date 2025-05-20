@@ -113,11 +113,10 @@ def main():
 
         # Object coords in global frame, if all poses available
         # !IMPORTANT! WE NOT USE ROTATION MATRIX, BECAUSE IT IS NOT NECESSARY FOR OBJECT POSITION
-        obj_coords = (
-            convert_point_to_global(tvec_obj, rvec_gl, tvec_gl)
-            if None not in (rvec_gl, tvec_gl, tvec_obj) else
-            None
-        )
+        if (rvec_gl is not None) and (tvec_gl is not None) and (tvec_obj is not None):
+            obj_coords = convert_point_to_global(tvec_obj, rvec_gl, tvec_gl)
+        else:
+            obj_coords = None
     
         # Compute global landmarks
         global_landmarks = convert_landmarks_to_global(landmarks_cam, rvec_gl, tvec_gl)

@@ -22,7 +22,7 @@ NOTES = "Standing"
 ACTION_LENGTH = 100 # actions
 PARAMETER_TIMESTEP = 1.0 / 10.0  # seconds between saved samples (0.1 s)
 
-GLOBAL_DIRECTORY = '../dataset/globalLandmarks' # Relative path to dataset from classification directory
+GLOBAL_DIRECTORY = '../dataset' # Relative path to dataset from classification directory
 FILE_NAME_GLOBAL = f'{GLOBAL_DIRECTORY}/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
 
 #------------------------ Window ------------------------
