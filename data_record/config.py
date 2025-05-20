@@ -45,10 +45,11 @@ ACTION_SESSION = "04"
 ACTION_SUBJECT = "ivan"
 NOTES = "Timed up and go test. The test person should stand up f rom a seated position without external help, walk 3 meters back and forth and sit down again (aids are permitted)."
 
+ACTION_LENGTH = 100 # actions
+PARAMETER_TIMESTEP = 1.0 / 10.0  # seconds between saved samples (0.1 s)
+
 FILE_NAME_LANDMARKS = f'{ACTION_TYPE}_{ACTION_SESSION}_cameralandmarksdata_{ACTION_SUBJECT}.json'
 FILE_NAME_GLOBAL = f'{ACTION_TYPE}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
-PARAMETER_TIMESTEP = 0.1
-ACTION_LENGTH = 100 # actions
 #HEADER: action, subject, (tMatrix, rMatrix optionally for camera coordinates), location, session... etc = METADATA
 METADATA = {
     "action": ACTION_TYPE,
