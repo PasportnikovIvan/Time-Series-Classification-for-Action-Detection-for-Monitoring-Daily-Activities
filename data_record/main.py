@@ -1,4 +1,5 @@
 #data_record/main.py
+# # Main module for data collection and processing
 
 from config import *
 from time import time
@@ -93,10 +94,7 @@ def main():
         print("Hard stop detected. Data will not be saved.")
         return
 
-    data_entries = {
-        "camera_landmarks": [],
-        "global_landmarks": []
-    }
+    data_entries = []
 
     for i, (
         time_of_frame, landmarks_cam, 
@@ -104,20 +102,22 @@ def main():
         rvec_obj, tvec_obj,
         sound_amp
     ) in enumerate(raw_buffer):
-        # compute rotation matrix if we have a valid rvec_gl
-        if rvec_gl is not None:
-            list_rvec = rvec_gl.flatten().tolist()
-            rmat = rodrigues_to_matrix(list_rvec)
-            rmat_list = rmat.tolist()
-        else:
-            rmat_list = None
+        # Compute rotation matrix list or None
+        rmat_list = (
+            rodrigues_to_matrix(rvec_gl.flatten().tolist()).tolist()
+            if rvec_gl is not None else
+            None
+        )
+        # Translation vector or None
         list_tvec = tvec_gl.flatten().tolist() if tvec_gl is not None else None
 
-        if rvec_gl is not None and tvec_gl is not None and tvec_obj is not None:
-            # tvec_obj — its camera→object translation
-            obj_coords = convert_point_to_global(tvec_obj, rvec_gl, tvec_gl)
-        else:
-            obj_coords = None
+        # Object coords in global frame, if all poses available
+        # !IMPORTANT! WE NOT USE ROTATION MATRIX, BECAUSE IT IS NOT NECESSARY FOR OBJECT POSITION
+        obj_coords = (
+            convert_point_to_global(tvec_obj, rvec_gl, tvec_gl)
+            if None not in (rvec_gl, tvec_gl, tvec_obj) else
+            None
+        )
     
         # Compute global landmarks
         global_landmarks = convert_landmarks_to_global(landmarks_cam, rvec_gl, tvec_gl)
@@ -125,15 +125,7 @@ def main():
             print(f"Global Landmarks: {global_landmarks}")
 
         # saving frame data
-        data_entries["camera_landmarks"].append({
-            "timestamp":       time_of_frame,
-            "rotation_matrix": rmat_list,
-            "translation_vec": list_tvec,
-            "landmarks":       landmarks_cam,
-            "obj_coords":      obj_coords,
-            "sound_amp":       sound_amp
-        })
-        data_entries["global_landmarks"].append({
+        data_entries.append({
             "timestamp":       time_of_frame,
             "rotation_matrix": rmat_list,
             "translation_vec": list_tvec,
@@ -144,18 +136,12 @@ def main():
         print(f"Processed frame {i + 1}/{ACTION_LENGTH} with timestamp {time_of_frame:.2f}s")
 
     # --- Assemble final JSON and save ---
-    final_output_camera = {
+    final_output = {
         "metadata": metadata,
-        "data": data_entries["camera_landmarks"]
+        "data": data_entries
     }
-    final_output_global = {
-        "metadata": metadata,
-        "data": data_entries["global_landmarks"]
-    }
-    save_data(final_output_camera, FILE_NAME_LANDMARKS)
-    print(f'Saved {len(data_entries["camera_landmarks"])} frames to {FILE_NAME_LANDMARKS}')
-    save_data(final_output_global, FILE_NAME_GLOBAL)
-    print(f'Saved {len(data_entries["global_landmarks"])} frames to {FILE_NAME_GLOBAL}')
+    save_data(final_output, FILE_NAME_GLOBAL)
+    print(f'Saved {len(data_entries)} frames to {FILE_NAME_GLOBAL}')
 
 if __name__ == "__main__":
     main()

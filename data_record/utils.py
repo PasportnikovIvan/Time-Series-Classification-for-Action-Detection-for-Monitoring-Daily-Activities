@@ -69,10 +69,11 @@ def calculate_median_depth(x, y, depth_frame, depth_scale):
     
     # Return the median of the closest points
     if len(depths) > 0:
-        # Sort the depths and take the first 25%
-        sorted_depths = np.sort(depths)
-        k = max(1, int(len(sorted_depths) * MEDIAN_PERCENT))
-        return np.median(sorted_depths[:k]) * depth_scale
+        # Sort the depths and take the k closest points
+        k = max(1, int(len(depths) * MEDIAN_PERCENT))
+        # Use partition with k-1 to get exactly k smallest values
+        closest = np.partition(depths, k-1)[:k]
+        return np.median(closest) * depth_scale
     else: # If not enough valid pixels, return 0
         print(f"Not enough valid pixels for depth calculation at ({x}, {y}). Found: {depth_frame[x, y] * depth_scale}")
         return depth_frame[x, y] * depth_scale
