@@ -32,7 +32,7 @@ ARUCO_DICT = aruco.getPredefinedDictionary(aruco.DICT_ARUCO_ORIGINAL)
 ARUCO_PARAMS = aruco.DetectorParameters()
 GLOBAL_MARKER_ID = 300 # defines your world coordinate frame
 OBJECT_MARKER_ID = 100 # attached to the object (e.g., bed or chair)
-MARKER_SIZE = 0.154  # Marker size in METERS
+MARKER_SIZE = 0.1592  # Marker size in METERS
 MARKER_POINTS = np.array(
     [
         [-MARKER_SIZE / 2, MARKER_SIZE / 2, 0],

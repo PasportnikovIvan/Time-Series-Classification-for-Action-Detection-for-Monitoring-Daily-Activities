@@ -61,11 +61,10 @@ def collect_frame(pipeline, pose, start_time, camera_matrix, distortion_coeffs):
     rgb_image = cv2.cvtColor(color_image, cv2.COLOR_BGR2RGB)
 
     # ArUco markers detection
-    rvec, tvec, _ = detect_aruco_markers(color_image, camera_matrix, distortion_coeffs)
+    markers_poses = detect_aruco_markers(color_image, camera_matrix, distortion_coeffs)
 
-    results = pose.process(rgb_image)
-    result = (time_of_frame, color_image, depth_image, results, (rvec, tvec))
-    return result
+    mp_results = pose.process(rgb_image)
+    return (time_of_frame, color_image, depth_image, mp_results, markers_poses)
 
 #=============== ARUCO MARKER DETECTION ===============
 def detect_aruco_markers(image, camera_matrix, distortion_coeffs):
@@ -81,13 +80,19 @@ def detect_aruco_markers(image, camera_matrix, distortion_coeffs):
     gray_image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     corners, ids, _ = cv2.aruco.detectMarkers(gray_image, ARUCO_DICT, parameters=ARUCO_PARAMS)
     if ids is None:
-        return None, None, None
+        return None
+    if VISUAL_LANDMARKS:
+        cv2.aruco.drawDetectedMarkers(image, corners, ids)
 
-    for corner in corners:
-        _, rvec, tvec = cv2.solvePnP(MARKER_POINTS, corner, camera_matrix, distortion_coeffs)
-        if VISUAL_LANDMARKS:
-            cv2.aruco.drawDetectedMarkers(image, corners, ids)
-            cv2.drawFrameAxes(image, camera_matrix, distortion_coeffs, rvec, tvec, 0.1)
-        if PRINT_LANDMARKS_TO_CONSOLE:
-            print(f"ArUco ID={ids[0][0]}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
-    return rvec, tvec, ids
+    poses = {}
+    for corner, mid in zip(corners, ids.flatten()):
+        if mid in (GLOBAL_MARKER_ID, OBJECT_MARKER_ID):
+            image_points = corner.reshape(-1, 2)
+            _, rvec, tvec = cv2.solvePnP(MARKER_POINTS, image_points, camera_matrix, distortion_coeffs)
+            poses[int(mid)] = (rvec, tvec)
+
+            if VISUAL_LANDMARKS:
+                cv2.drawFrameAxes(image, camera_matrix, distortion_coeffs, rvec, tvec, MARKER_SIZE / 2)
+            if PRINT_LANDMARKS_TO_CONSOLE:
+                print(f"ArUco ID={mid}, Position={tvec.flatten()}, Rotation={rvec.flatten()}")
+    return poses

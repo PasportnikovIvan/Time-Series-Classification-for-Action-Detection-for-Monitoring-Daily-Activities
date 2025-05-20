@@ -102,6 +102,21 @@ def pixels_to_camera_coordinates(x, y, depth, camera_matrix):
     return cam_x, cam_y, cam_z
 
 #=============== CAMERA -> GLOBAL COORDS ===============
+#--------------- POINT ----------------
+def convert_point_to_global(cam_point, rvec, tvec):
+    """
+    Convert a single 3D point from camera frame into the global ArUco frame.
+    cam_point: (3,) array in camera coords (e.g., tvec of object marker)
+    rvec, tvec: pose of GLOBAL marker (from solvePnP)
+    """
+    R_mat, _ = cv2.Rodrigues(rvec)
+    cam_pt = np.array(cam_point).reshape(3,1)
+    tvec = np.array(tvec).reshape(3,1)
+    # P_global = R^T * (P_cam - t)
+    gl = R_mat.T.dot(cam_pt - tvec)
+    return gl.flatten().tolist()
+
+#--------------- LANDMARKS ----------------
 def convert_landmarks_to_global(landmarks, rvec, tvec):
     """
     Convert local pose landmarks to global using ArUco marker.

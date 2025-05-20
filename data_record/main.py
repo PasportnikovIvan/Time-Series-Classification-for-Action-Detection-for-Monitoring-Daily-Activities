@@ -5,7 +5,7 @@ from time import time
 import cv2
 from data_collection import setup_camera_and_pose, collect_frame
 from data_processing import process_landmarks
-from utils import build_metadata, rodrigues_to_matrix, convert_landmarks_to_global
+from utils import build_metadata, rodrigues_to_matrix, convert_point_to_global, convert_landmarks_to_global
 from data_storage import save_data
 
 
@@ -34,17 +34,24 @@ def main():
             if result is None:
                 continue
 
-            time_of_frame, color_image, depth_image, results, (rvec, tvec) = result
+            time_of_frame, color_image, depth_image, mp_results, markers_poses = result
+            if mp_results is None or markers_poses is None:
+                continue
+
+            # global-marker pose
+            rvec_gl, tvec_gl = markers_poses.get(GLOBAL_MARKER_ID, (None, None))
+            # object-marker pose
+            rvec_obj, tvec_obj = markers_poses.get(OBJECT_MARKER_ID, (None, None))
             
             # Calculate 3D coordinates with depth
-            landmarks = process_landmarks(results, color_image, depth_image, depth_scale, camera_matrix)
-            if PRINT_LANDMARKS_TO_CONSOLE and landmarks:
-                print(f"Extracted Landmarks: {landmarks}")
+            landmarks_cam = process_landmarks(mp_results, color_image, depth_image, depth_scale, camera_matrix)
+            if PRINT_LANDMARKS_TO_CONSOLE and landmarks_cam:
+                print(f"Extracted Landmarks: {landmarks_cam}")
 
             # Throttle to PARAMETER_TIMESTEP
             if (time_of_frame - last_save_time) >= PARAMETER_TIMESTEP:
                 # Saving frame data
-                raw_buffer.append((time_of_frame, landmarks, rvec, tvec))
+                raw_buffer.append((time_of_frame, landmarks_cam, rvec_gl, tvec_gl, rvec_obj, tvec_obj))
                 frame_count += 1
                 last_save_time = time_of_frame
                 print(f"Collected frame {frame_count}/{ACTION_LENGTH} at time {time_of_frame:.2f}s")
@@ -70,33 +77,41 @@ def main():
         "global_landmarks": []
     }
 
-    for i, (time_of_frame, landmarks, rvec, tvec) in enumerate(raw_buffer):
-        # compute rotation matrix if we have a valid rvec
-        if rvec is not None:
-            list_rvec = rvec.flatten().tolist()
+    for i, (time_of_frame, landmarks_cam, rvec_gl, tvec_gl, rvec_obj, tvec_obj) in enumerate(raw_buffer):
+        # compute rotation matrix if we have a valid rvec_gl
+        if rvec_gl is not None:
+            list_rvec = rvec_gl.flatten().tolist()
             rmat = rodrigues_to_matrix(list_rvec)
             rmat_list = rmat.tolist()
         else:
             rmat_list = None
-        list_tvec = tvec.flatten().tolist() if tvec is not None else None
+        list_tvec = tvec_gl.flatten().tolist() if tvec_gl is not None else None
+
+        if rvec_gl is not None and tvec_gl is not None and tvec_obj is not None:
+            # tvec_obj — its camera→object translation
+            obj_coords = convert_point_to_global(tvec_obj, rvec_gl, tvec_gl)
+        else:
+            obj_coords = None
     
         # Compute global landmarks
-        global_landmarks = convert_landmarks_to_global(landmarks, rvec, tvec)
+        global_landmarks = convert_landmarks_to_global(landmarks_cam, rvec_gl, tvec_gl)
         if PRINT_LANDMARKS_TO_CONSOLE and global_landmarks:
             print(f"Global Landmarks: {global_landmarks}")
 
         # saving frame data
         data_entries["camera_landmarks"].append({
-            "timestamp": time_of_frame,
+            "timestamp":       time_of_frame,
             "rotation_matrix": rmat_list,
             "translation_vec": list_tvec,
-            "landmarks": landmarks
+            "landmarks":       landmarks_cam,
+            "obj_coords":      obj_coords
         })
         data_entries["global_landmarks"].append({
-            "timestamp": time_of_frame,
+            "timestamp":       time_of_frame,
             "rotation_matrix": rmat_list,
             "translation_vec": list_tvec,
-            "landmarks": global_landmarks
+            "landmarks":       global_landmarks,
+            "obj_coords":      obj_coords
         })
         print(f"Processed frame {i + 1}/{ACTION_LENGTH} with timestamp {time_of_frame:.2f}s")
 
