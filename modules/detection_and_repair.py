@@ -3,17 +3,16 @@ import numpy as np
 from scipy.interpolate import interp1d
 
 # Constants
-ACTION = 'sppb'
-SESSION = '04'
+ACTION = 'walking'
+SESSION = '10'
 SUBJECT = 'ivan'
-TYPE_OF_DATA = 'camera'  # 'camera' or 'global'
-LANDMARKS_DIR = f'dataset/{TYPE_OF_DATA}Landmarks'
+LANDMARKS_DIR = f'dataset/processed'
 
-INPUT_FILE = f'{LANDMARKS_DIR}/{ACTION}/{ACTION}_{SESSION}_{TYPE_OF_DATA}landmarksdata_{SUBJECT}.json'
+INPUT_FILE = f'{LANDMARKS_DIR}/{ACTION}/{ACTION}_{SESSION}_globallandmarksdata_{SUBJECT}.json'
 OUTPUT_FILE_CLEAN = f'{ACTION}_{SESSION}_cleaned.json'
 OUTPUT_FILE_REPAIRED = f'{ACTION}_{SESSION}_repaired.json'
 
-DISTANCE_THRESHOLD = 0.7  # Meters
+DISTANCE_THRESHOLD = 0.5  # Meters
 
 def load_data(filename):
     with open(filename, 'r') as f:
@@ -40,7 +39,7 @@ def detect_misdetections(data):
 
 def remove_misdetections(data, misdetection_indices):
     clean_data = [frame for i, frame in enumerate(data['data']) if i not in misdetection_indices]
-    return {"header": data["header"], "data": clean_data}
+    return {"metadata": data["metadata"], "data": clean_data}
 
 def repair_misdetections(data, misdetection_indices):
     repaired_data = data['data'].copy()
@@ -75,7 +74,7 @@ def repair_misdetections(data, misdetection_indices):
         repaired_data[idx]['landmarks'] = interpolated_landmarks
         print(f"Repaired frame {idx} using interpolation")
     
-    return {"header": data["header"], "data": repaired_data}
+    return {"metadata": data["metadata"], "data": repaired_data}
 
 def save_data(data, filename):
     with open(filename, 'w') as f:

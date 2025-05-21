@@ -48,9 +48,8 @@ def save_split_files(train_files, test_files, val_files=None, output_dir="splits
         with open(os.path.join(output_dir, "val_files.txt"), "w") as f:
             f.write("\n".join(val_files))
 
-actions = ['timed-up-and-go', 'falling', 'sitting', 'standing']
-camera_path = "dataset/cameraLandmarks"
-global_path = "dataset/globalLandmarks"
+actions = ['standing', 'sitting', 'walking']
+global_path = "dataset/processed"
 dir = "splits/"
 
 # Binary split for global landmarks (train/test only)

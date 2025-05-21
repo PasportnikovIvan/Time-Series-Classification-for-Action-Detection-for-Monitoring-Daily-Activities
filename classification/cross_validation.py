@@ -3,7 +3,7 @@
 import os
 import numpy as np
 from sklearn.model_selection import KFold
-from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, confusion_matrix
 
 from data_utils import collect_all_files
 from dtw_distances import classify_with_knn_dtw
@@ -14,7 +14,10 @@ def cross_validate_knn_dtw(
     n_splits: int = 5,
     k: int = 3,
     n_clusters: int = 3,
-    random_state: int = 42
+    random_state: int = 42,
+    include_obj: bool = False,
+    include_sound: bool = False,
+    show_plot: bool = True,
 ):
     """
     5-fold cross-validation for your k-NN+DTW classifier.
@@ -36,9 +39,11 @@ def cross_validate_knn_dtw(
         train = [data[i] for i in train_idx]
         test  = [data[i] for i in test_idx]
         # classify_with_knn_dtw expects list[(path,action)] for train & test
-        preds, trues = classify_with_knn_dtw(train, test, k=k, n_clusters=n_clusters)
+        preds, trues = classify_with_knn_dtw(train, test, k=k, n_clusters=n_clusters, include_obj=include_obj, include_sound=include_sound, show_plot=show_plot)
         acc = accuracy_score(trues, preds)
         print(f"Fold {fold} — accuracy: {acc:.3f}\n")
         accuracies.append(acc)
+        print("Confusion Matrix:")
+        print(confusion_matrix(trues, preds))
 
     return accuracies

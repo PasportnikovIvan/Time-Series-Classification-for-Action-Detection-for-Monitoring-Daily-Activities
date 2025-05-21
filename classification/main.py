@@ -9,7 +9,28 @@ import numpy as np
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix 
 import pdb
 
-def visualize_trajectories(actions, camera_dir, global_dir, action_colors, session = 1):
+# Paths and parameters
+RAWS_DIR         = 'dataset/raws'
+PROCESSED_DIR    = 'dataset/processed'
+SPLITS_DIR       = 'splits/global_tt'
+ALL_FILES_DIR    = 'splits/all_files'
+TRAIN_SPLIT      = os.path.join(SPLITS_DIR, 'train_files.txt')
+TEST_SPLIT       = os.path.join(SPLITS_DIR, 'test_files.txt')
+ACTIONS          = ['standing', 'sitting', 'walking']
+ACTION_COLORS    = {
+    'falling': 'r',
+    'timed-up-and-go': 'b',
+    'sitting': 'g',
+    'standing': 'm',
+    'lying': 'r',
+    'standing-side-by-side': 'c',
+    'walking': 'y'
+}
+N_CLUSTERS       = 3
+K_NEIGHBORS      = 3
+N_FOLDS          = 5
+
+def visualize_trajectories(actions, camera_dir, global_dir, action_colors, session = 1, nose=False, body=False, show_camera=False):
     """
     Visualizes the trajectories for the first sessions of actions.
     Args:
@@ -23,10 +44,14 @@ def visualize_trajectories(actions, camera_dir, global_dir, action_colors, sessi
         camera_file, global_file = get_first_session_files(action, camera_dir, global_dir, session=session)
         if camera_file and global_file:
             print(f"Visualization for: {action}")
-            plot_nose_trajectory(camera_file, f"{action} - Camera coordinates", color=action_colors[action])
-            plot_nose_trajectory(global_file, f"{action} - Global coordinates", color=action_colors[action])
-            simulate_full_body_trajectory(camera_file, f"{action} - Camera Trajectory Simulation", color=action_colors[action])
-            simulate_full_body_trajectory(global_file, f"{action} - Global Trajectory Simulation", color=action_colors[action])
+            if nose:
+                if show_camera:
+                    plot_nose_trajectory(camera_file, f"{action} - Camera coordinates", color=action_colors[action])
+                plot_nose_trajectory(global_file, f"{action} - Global coordinates", color=action_colors[action])
+            if body:
+                if show_camera:
+                    simulate_full_body_trajectory(camera_file, f"{action} - Camera Trajectory Simulation", color=action_colors[action])
+                simulate_full_body_trajectory(global_file, f"{action} - Global Trajectory Simulation", color=action_colors[action])
         else:
             print(f"Files for {action} not found.")
 
@@ -78,7 +103,7 @@ def compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png
     distance_matrix, file_list = compute_dtw_distance_matrix(all_files, use_all_landmarks=use_all_landmarks)
     plot_distance_matrix(distance_matrix, file_list, save_png, cmap='viridis')
 
-def perform_1NN_classification(train_files, test_files):
+def perform_1NN_classification(train_files, test_files, include_obj=False, include_sound=False):
     """
     Performs 1NN classification using DTW on the provided training and testing files.
     Args:
@@ -86,7 +111,7 @@ def perform_1NN_classification(train_files, test_files):
         test_files (list): List of testing file paths.
     """
     # DTW Classification
-    predictions, trues = classify_with_dtw(train_files, test_files)
+    predictions, trues = classify_with_dtw(train_files, test_files, include_obj=include_obj, include_sound=include_sound)
 
     # Filter out None predictions (if any)
     valid_pairs = [(p, t) for p, t in zip(predictions, trues) if p is not None]
@@ -102,7 +127,7 @@ def perform_1NN_classification(train_files, test_files):
     else:
         print("No valid predictions made.")
 
-def perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3):
+def perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3, include_obj=False, include_sound=False):
     """
     Performs kNN classification using DTW metric on the provided training and testing files.
     Args:
@@ -111,7 +136,7 @@ def perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3):
         k (int): Number of neighbors to consider (default is 3).
     """
     # Cluster → kNN
-    predictions, trues = classify_with_knn_dtw(train_files, test_files, k=k, n_clusters=n_clusters)
+    predictions, trues = classify_with_knn_dtw(train_files, test_files, k=k, n_clusters=n_clusters, include_obj=include_obj, include_sound=include_sound)
 
     # Accuracy
     valid_pairs = [(p, t) for p, t in zip(predictions, trues) if p is not None]
@@ -127,7 +152,7 @@ def perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=3):
     else:
         print("No valid predictions made.")
 
-def perform_cross_validation_knn_dtw(global_dir, actions, n_folds=5, k=3, n_clusters=3):
+def perform_cross_validation_knn_dtw(global_dir, actions, n_folds=5, k=3, n_clusters=3, include_obj=False, include_sound=False, show_plot=True):
     """
     Performs k-fold cross-validation for k-NN classification using DTW metric.
     Args:
@@ -137,43 +162,41 @@ def perform_cross_validation_knn_dtw(global_dir, actions, n_folds=5, k=3, n_clus
         k (int): Number of neighbors to consider (default is 3).
         n_clusters (int): Number of clusters for k-NN classification (default is 3).
     """
-    accuracies = cross_validate_knn_dtw(global_dir, actions, n_splits=n_folds, k=k, n_clusters=n_clusters)
+    accuracies = cross_validate_knn_dtw(global_dir, actions, n_splits=n_folds, k=k, n_clusters=n_clusters, include_obj=include_obj, include_sound=include_sound, show_plot=show_plot)
     print(f"\n{n_folds}-fold CV mean accuracy: {np.mean(accuracies):.3f}  σ={np.std(accuracies):.3f}")
 
 def main():
-    # Paths to directories with data
-    camera_directory = 'dataset/cameraLandmarks' # Relative path to dataset from classification directory
-    global_directory = 'dataset/globalLandmarks'
-    splits_dir = 'splits/global_tt'
-    all_files_dir = 'splits/all_files'
-    actions = ['timed-up-and-go', 'falling', 'sitting', 'standing'] # List of actions to visualize
-    # actions = ['falling', 'lying', 'sitting', 'standing', 'standing-side-by-side'] # List of actions to visualize
-    action_colors = {
-        'falling': 'r',
-        'timed-up-and-go': 'b',
-        'sitting': 'g',
-        'standing': 'm',
-        'lying': 'r',
-        'standing-side-by-side': 'c'
-    }
-    all_files = collect_all_files(actions, directory = global_directory)
-    # Load split files
-    train_files = load_split_files(os.path.join(splits_dir, 'train_files.txt'), global_directory)
-    test_files = load_split_files(os.path.join(splits_dir, 'test_files.txt'), global_directory)
+    # 1) Load split files
+    train = load_split_files(TRAIN_SPLIT, PROCESSED_DIR)
+    test  = load_split_files(TEST_SPLIT,  PROCESSED_DIR)
+    all_files = collect_all_files(ACTIONS, directory = PROCESSED_DIR)
 
-    visualize_trajectories(actions[3:4], camera_directory, global_directory, action_colors, session = 10)
+    # 2) Visualize trajectories and velocities
+    visualize_trajectories(ACTIONS, RAWS_DIR, PROCESSED_DIR, ACTION_COLORS, session = 1, nose=False, body=True, show_camera=False)
+    # visualize_velocities(ACTIONS, PROCESSED_DIR)
+    # compute_and_print_dtw_distances('walking', RAWS_DIR, PROCESSED_DIR, ACTIONS)
+    # compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
 
-    visualize_velocities(actions, global_directory)
+    # # 3) 1-NN + DTW (motion only)
+    # perform_1NN_classification(train, test)
+    # # (motion + object)
+    # perform_1NN_classification(train, test, include_obj=True, include_sound=False)
+    # # (motion + object + sound)
+    # perform_1NN_classification(train, test, include_obj=True, include_sound=True)
 
-    compute_and_print_dtw_distances('standing', camera_directory, global_directory, actions)
+    # # 4) k-NN + DTW (motion only)
+    # perform_kNN_dtw_with_clusters(train, test, k=K_NEIGHBORS, n_clusters=N_CLUSTERS, show_plot=False)
+    # # (motion + object)
+    # perform_kNN_dtw_with_clusters(train, test, k=K_NEIGHBORS, n_clusters=N_CLUSTERS, include_obj=True, include_sound=False, show_plot=False)
+    # # (motion + object + sound)
+    # perform_kNN_dtw_with_clusters(train, test, k=K_NEIGHBORS, n_clusters=N_CLUSTERS, include_obj=True, include_sound=True, show_plot=False)
 
-    compute_and_plot_distance_matrix(all_files, use_all_landmarks=True, save_png=False)
-
-    perform_1NN_classification(train_files, test_files)
-    
-    perform_kNN_dtw_with_clusters(train_files, test_files, k=3, n_clusters=5)
-
-    perform_cross_validation_knn_dtw(global_directory, actions, n_folds=5, k=3, n_clusters=5)
+    # # 5) Cross-validation (motion only)
+    # perform_cross_validation_knn_dtw(PROCESSED_DIR, ACTIONS, n_folds=N_FOLDS, k=K_NEIGHBORS, n_clusters=N_CLUSTERS, show_plot=False)
+    # # (motion + object)
+    # perform_cross_validation_knn_dtw(PROCESSED_DIR, ACTIONS, n_folds=N_FOLDS, k=K_NEIGHBORS, n_clusters=N_CLUSTERS, include_obj=True, include_sound=False, show_plot=False)
+    # # (motion + object + sound)
+    # perform_cross_validation_knn_dtw(PROCESSED_DIR, ACTIONS, n_folds=N_FOLDS, k=K_NEIGHBORS, n_clusters=N_CLUSTERS, include_obj=True, include_sound=True, show_plot=False)
 
 if __name__ == "__main__":
     main()

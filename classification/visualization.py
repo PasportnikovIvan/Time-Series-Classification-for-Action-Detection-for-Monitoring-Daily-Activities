@@ -76,7 +76,11 @@ def simulate_full_body_trajectory(file_path, title='Nose Trajectory Simulation',
         data = json.load(f)
 
     # Extract all landmarks from each frame
+    # Extract frames, timestamps, object coords, and audio
     frames = [frame['landmarks'] for frame in data['data'] if 'landmarks' in frame]
+    timestamps = [frame['timestamp'] for frame in data['data']]
+    obj_list = [frame.get('obj_coords') for frame in data['data']]
+    sound_amp = [frame.get('sound_amp', 0.0) for frame in data['data']]
     if not frames or not all(all(key in frame for key in ['nose']) for frame in frames):
         print(f"Error: Incomplete landmark data in {file_path}")
         return
@@ -118,11 +122,25 @@ def simulate_full_body_trajectory(file_path, title='Nose Trajectory Simulation',
         "right foot index"
     ]
     
+    # Define connections between landmarks (from MediaPipe Pose)
+    connections = mp.solutions.pose.POSE_CONNECTIONS
+
     # Extract coordinates for all landmarks across frames
     coords = {name: [[frame[name][j] for frame in frames] for j in range(3)] for name in landmark_names}
 
-    # Define connections between landmarks (from MediaPipe Pose)
-    connections = mp.solutions.pose.POSE_CONNECTIONS
+    # Prepare object trajectory lists
+    obj_x, obj_y, obj_z = [], [], []
+    has_object = any(o is not None for o in obj_list)
+    for o in obj_list:
+        if o is None:
+            obj_x.append(np.nan)
+            obj_y.append(np.nan)
+            obj_z.append(np.nan)
+        else:
+            ox, oy, oz = o
+            obj_x.append(ox)
+            obj_y.append(oy)
+            obj_z.append(oz)
 
     # Create figure and 3D axes
     fig = plt.figure(figsize=(10, 8))
@@ -136,9 +154,9 @@ def simulate_full_body_trajectory(file_path, title='Nose Trajectory Simulation',
     ax.set_title(title)
 
     # Set axis limits based on data
-    all_x = [x for name in coords for x in coords[name][0]]
-    all_y = [y for name in coords for y in coords[name][1]]
-    all_z = [z for name in coords for z in coords[name][2]]
+    all_x = [x for name in coords for x in coords[name][0]] + obj_x
+    all_y = [y for name in coords for y in coords[name][1]] + obj_y
+    all_z = [z for name in coords for z in coords[name][2]] + obj_z
     ax.set_xlim(min(all_x), max(all_x))
     ax.set_ylim(min(all_y), max(all_y))
     ax.set_zlim(min(all_z), max(all_z))
@@ -146,6 +164,8 @@ def simulate_full_body_trajectory(file_path, title='Nose Trajectory Simulation',
     # Initialize lines for connections and points for landmarks
     lines = [ax.plot([], [], [], color=color, alpha=0.5)[0] for _ in connections]
     points = ax.plot([], [], [], 'o', color=color, markersize=4, label='Landmarks')[0]
+    if has_object:
+        obj_point = ax.plot([], [], [], 'X', color='k', markersize=8, label='Object')[0]
 
     # Add legend
     ax.legend()
@@ -156,9 +176,12 @@ def simulate_full_body_trajectory(file_path, title='Nose Trajectory Simulation',
         for line in lines:
             line.set_data([], [])
             line.set_3d_properties([])
-            points.set_data([], [])
-            points.set_3d_properties([])
-            return lines + [points]
+        points.set_data([], [])
+        points.set_3d_properties([])
+        if has_object:
+            obj_point.set_data([], [])
+            obj_point.set_3d_properties([])
+        return lines + [points] + ([obj_point] if has_object else [])
     
     # Animation update function
     def animate(i):
@@ -179,7 +202,12 @@ def simulate_full_body_trajectory(file_path, title='Nose Trajectory Simulation',
             lines[idx].set_data(x_line, y_line)
             lines[idx].set_3d_properties(z_line)
 
-        return lines + [points]
+        # Update object marker if present
+        if has_object:
+            obj_point.set_data([obj_x[i]], [obj_y[i]])
+            obj_point.set_3d_properties([obj_z[i]])
+
+        return lines + [points] + ([obj_point] if has_object else [])
     
     # Create animation
     ani = animation.FuncAnimation(fig, animate, frames=len(frames), init_func=init, blit=False, interval=100)
@@ -188,6 +216,16 @@ def simulate_full_body_trajectory(file_path, title='Nose Trajectory Simulation',
     ax.view_init(elev=20, azim=30)
     
     # Display the graph
+    plt.show()
+
+    # --- Audio amplitude plot ---
+    plt.figure(figsize=(8, 3))
+    plt.plot(timestamps, sound_amp, color='tab:orange')
+    plt.xlabel('Time (s)')
+    plt.ylabel('Audio amplitude')
+    plt.title(f'{title} — Sound Amplitude')
+    plt.grid(True)
+    plt.tight_layout()
     plt.show()
 
 def plot_nose_velocity(file_paths, action):
