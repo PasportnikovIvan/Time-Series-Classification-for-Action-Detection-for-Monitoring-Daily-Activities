@@ -1,4 +1,4 @@
-#classification/vizualization.py
+#classification/dtw_distances.py
 
 import os
 import json
