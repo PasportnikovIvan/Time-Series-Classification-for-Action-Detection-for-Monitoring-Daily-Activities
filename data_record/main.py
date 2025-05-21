@@ -17,7 +17,8 @@ def main():
     Main func for rendering frames and save data.
     """
     # Setup camera; pose and audio detection
-    pipeline, pose, depth_scale, camera_matrix, distortion_coeffs, audio_queue = setup_camera_and_pose()
+    pipeline, pose, depth_scale, camera_matrix, distortion_coeffs, audio_queue, audio_stream = setup_camera_and_pose()
+    print(">>> audio_queue:", audio_queue, "alive streams:", audio_stream)
 
     # Build metadata once
     metadata = build_metadata(camera_matrix.tolist(), distortion_coeffs.tolist(), depth_scale)
@@ -62,6 +63,7 @@ def main():
 
             # Throttle to PARAMETER_TIMESTEP
             if (time_of_frame - last_save_time) >= PARAMETER_TIMESTEP:
+                print(f">>> Audio amplitude: {audio_amp:.4f}")
                 # Saving frame data
                 raw_buffer.append((
                     time_of_frame,
@@ -89,6 +91,7 @@ def main():
         return
 
     finally:
+        audio_stream.stop()
         pipeline.stop()
         cv2.destroyAllWindows()
 

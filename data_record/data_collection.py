@@ -47,7 +47,7 @@ def setup_camera_and_pose():
     )
 
     # Audio capture setup
-    audio_queue = queue.Queue(maxsize=10)
+    audio_queue = queue.Queue()
 
     def _audio_callback(indata, frames, time_info, status):
         # Put audio buffer into queue
@@ -58,7 +58,7 @@ def setup_camera_and_pose():
     audio_stream = sd.InputStream(callback=_audio_callback)
     audio_stream.start()
 
-    return pipeline, pose, depth_scale, camera_matrix, distortion_coeffs, audio_queue
+    return pipeline, pose, depth_scale, camera_matrix, distortion_coeffs, audio_queue, audio_stream
 
 #=============== FRAME COLLECTION AND PROCESSING ===============
 def collect_frame(pipeline, pose, start_time, camera_matrix, distortion_coeffs, audio_queue):
@@ -89,9 +89,9 @@ def collect_frame(pipeline, pose, start_time, camera_matrix, distortion_coeffs, 
 
     # -- Audio amplitude (RMS) --
     try:
-        audio_buffer = audio_queue.get()
+        audio_buffer = audio_queue.get_nowait()
         # Mix down to mono if stereo
-        mono = audio_buffer.mean(axis=1) if audio_buffer.ndim > 1 else audio_buffer
+        mono = audio_buffer.mean(axis=1) if audio_buffer.ndim > 1 else audio_buffer.flatten()
         audio_amp = float(np.sqrt(np.mean(mono**2)))
     except queue.Empty:
         audio_amp = 0.0

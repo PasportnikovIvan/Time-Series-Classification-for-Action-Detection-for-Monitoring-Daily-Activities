@@ -6,8 +6,9 @@ import numpy as np
 
 #------------------------ METADATA ------------------------
 # Define constants for action
-ACTION_NAME = "standing"
-ACTION_SESSION = "01"
+ACTION_NAME = "walking"
+ACTION_SESSION = "10"
+NOTES = "walking 3 steps to the left and 3 steps to the right with marker"
 ACTION_SUBJECT = "ivan"
 SUBJECT_AGE = "21"
 SUBJECT_GENDER = "male"
@@ -16,7 +17,6 @@ ACTION_LOCATION = "bubenec_dorm"
 ACTION_LIGHTING_CONDITIONS = "bright"
 CAMERA_MODEL = "Intel RealSense D455"
 RECORDING_DATE = "2025-05-01"
-NOTES = "Subject is standing still, no movement"
 
 #------------------------ Saving Action ------------------------
 ACTION_LENGTH = 100 # actions
@@ -38,7 +38,7 @@ AUDIO_RATE = 44100
 AUDIO_CHANNELS = 1
 
 #------------------------ Depth Filtering ------------------------
-RADIUS_WINDOW = 5     # window size for depth patch
+RADIUS_WINDOW = 4     # window size for depth patch
 MEDIAN_PERCENT = 0.25 # fraction of closest depths
 
 #------------------------ Aruco ------------------------
