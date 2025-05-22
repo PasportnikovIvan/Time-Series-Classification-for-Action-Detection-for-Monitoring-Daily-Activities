@@ -28,7 +28,7 @@ def setup_camera_and_pose():
     depth_sensor = profile.get_device().first_depth_sensor()
     depth_scale = depth_sensor.get_depth_scale()
 
-    # Camera intrinsics
+    # Camera intrinsics for dynamic calibration
     color_profile = profile.get_stream(rs.stream.color).as_video_stream_profile()
     intr = color_profile.get_intrinsics()
     camera_matrix = np.array([
