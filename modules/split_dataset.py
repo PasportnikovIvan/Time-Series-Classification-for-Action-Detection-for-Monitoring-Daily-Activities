@@ -48,7 +48,7 @@ def save_split_files(train_files, test_files, val_files=None, output_dir="splits
         with open(os.path.join(output_dir, "val_files.txt"), "w") as f:
             f.write("\n".join(val_files))
 
-actions = ['standing', 'sitting', 'walking']
+actions = ['standing', 'sitting', 'walking', 'bad_walking', 'falling_floor', 'falling_bed', 'lying_bed', 'lying_floor']
 global_path = "dataset/processed"
 dir = "splits/"
 

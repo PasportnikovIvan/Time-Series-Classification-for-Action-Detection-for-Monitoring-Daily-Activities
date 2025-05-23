@@ -215,12 +215,43 @@ def plot_distance_matrix(distance_matrix, file_list, save_png=False, cmap='virid
         file_list (list): List of file paths.
         title (str): Title for the plot.
     """
-    labels = [os.path.basename(f).split('_')[0] + '_' + os.path.basename(f).split('_')[1] for f in file_list]
+    # 1) Extract action names from file_list
+    actions = []
+    for f in file_list:
+        name = os.path.basename(f)
+        name = os.path.splitext(name)[0]              # delete .json
+        parts = name.split('_')
+        action = '_'.join(parts[:-3])                 # taking all except session, landmarkstype, subject
+        actions.append(action)
+
+    # 2) Collect unique actions and their positions
+    unique_actions = []
+    positions = []
+    i = 0
+    N = len(actions)
+    while i < N:
+        a = actions[i]
+        j = i
+        while j < N and actions[j] == a:
+            j += 1
+        unique_actions.append(a)
+        positions.append((i + j - 1) / 2.0)
+        i = j
+
+    # 3) Draw heatmap
     plt.figure(figsize=(10, 8))
-    sns.heatmap(distance_matrix, xticklabels=labels, yticklabels=labels, cmap=cmap, annot=False)
+    sns.heatmap(distance_matrix,
+                xticklabels=False,
+                yticklabels=False,
+                cmap=cmap,
+                annot=False)
+    plt.xticks(positions, unique_actions, rotation=45, ha='right')
+    plt.yticks(positions, unique_actions, rotation=0)
     plt.title(title)
+    plt.tight_layout()
+
     if save_png:
-        plt.savefig('dtw_distance_matrix.png')  # Save the figure
+        plt.savefig('dtw_distance_matrix.png')
     plt.show()
 
 # --- 1-NN classification via DTW ---

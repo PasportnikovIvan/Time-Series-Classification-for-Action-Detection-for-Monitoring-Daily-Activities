@@ -63,7 +63,7 @@ def main():
 
             # Throttle to PARAMETER_TIMESTEP
             if (time_of_frame - last_save_time) >= PARAMETER_TIMESTEP:
-                print(f">>> Audio amplitude: {audio_amp:.4f}")
+                # print(f">>> Audio amplitude: {audio_amp:.4f}")
                 # Saving frame data
                 raw_buffer.append((
                     time_of_frame,

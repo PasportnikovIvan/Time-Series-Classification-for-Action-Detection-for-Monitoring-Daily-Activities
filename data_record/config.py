@@ -6,9 +6,9 @@ import numpy as np
 
 #------------------------ METADATA ------------------------
 # Define constants for action
-ACTION_NAME = "walking"
-ACTION_SESSION = "10"
-NOTES = "walking 3 steps to the left and 3 steps to the right with marker"
+ACTION_NAME = "timed-up-and-go"
+ACTION_SESSION = "04" 
+NOTES = "Repeated Chair Stands"
 ACTION_SUBJECT = "ivan"
 SUBJECT_AGE = "21"
 SUBJECT_GENDER = "male"
@@ -22,7 +22,7 @@ RECORDING_DATE = "2025-05-01"
 ACTION_LENGTH = 100 # actions
 PARAMETER_TIMESTEP = 1.0 / 10.0  # seconds between saved samples (0.1 s)
 
-GLOBAL_DIRECTORY = '../dataset' # Relative path to dataset from classification directory
+GLOBAL_DIRECTORY = '../dataset_tests' # Relative path to dataset from classification directory
 FILE_NAME_RAW = f'{GLOBAL_DIRECTORY}/raws/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
 FILE_NAME_PROCESSED = f'{GLOBAL_DIRECTORY}/processed/{ACTION_NAME}/{ACTION_NAME}_{ACTION_SESSION}_globallandmarksdata_{ACTION_SUBJECT}.json'
 
